@@ -46,9 +46,12 @@ def format_bbox(bbox: list) -> str:
         
     Returns:
         Formatted string representation
+        
+    Raises:
+        ValueError: If bbox format is invalid
     """
     if len(bbox) != 4:
-        return "Invalid bounding box"
+        raise ValueError("Bounding box must have exactly 4 elements")
     
     return (f"Longitude: [{bbox[0]:.4f}, {bbox[2]:.4f}], "
             f"Latitude: [{bbox[1]:.4f}, {bbox[3]:.4f}]")

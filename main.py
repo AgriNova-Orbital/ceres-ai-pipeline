@@ -51,6 +51,12 @@ def main():
         collection_size = collection.size().getInfo()
         date_range = gee_api.get_collection_date_range(collection)
         
+        # Handle empty collection
+        if collection_size == 0 or date_range == (None, None):
+            print("\n⚠ No images found matching the criteria.")
+            print("Try adjusting the date range or increasing max cloud cover.")
+            return 0  # Not an error, just no data available
+        
         # Print summary
         print(visualization.create_summary_report(
             collection_size=collection_size,
@@ -58,11 +64,6 @@ def main():
             aoi=bbox,
             cloud_cover=max_cloud_cover
         ))
-        
-        if collection_size == 0:
-            print("\n⚠ No images found matching the criteria.")
-            print("Try adjusting the date range or increasing max cloud cover.")
-            return
         
         # Create median composite
         visualization.print_section_header("Creating Median Composite")

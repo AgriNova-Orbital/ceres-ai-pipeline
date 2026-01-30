@@ -6,7 +6,7 @@ services:
     image: earth-engine-app:latest
     container_name: earth-engine-app
     env_file:
-      - .env
+      - .env  # Loaded from host, not copied into image (see .dockerignore)
     volumes:
       # Mount data directory for exports
       - ./data:/app/data
@@ -15,7 +15,10 @@ services:
     environment:
       # Override specific environment variables if needed
       - PYTHONUNBUFFERED=1
-    restart: unless-stopped
+    # For batch processing that exits after completion
+    restart: "no"
+    # Use 'restart: on-failure' if you want to retry on errors
+    # Use 'restart: unless-stopped' only for long-running services
     # Uncomment to expose Flask port if running a web service
     # ports:
     #   - "5000:5000"

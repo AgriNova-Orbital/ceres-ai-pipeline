@@ -23,9 +23,9 @@ class Settings:
     # Default AOI (Area of Interest) - bounding box format: [lon_min, lat_min, lon_max, lat_max]
     DEFAULT_AOI = os.getenv('DEFAULT_AOI', '-122.5,37.7,-122.0,37.9')
     
-    # Default date range
-    DEFAULT_START_DATE = os.getenv('DEFAULT_START_DATE', '2023-01-01')
-    DEFAULT_END_DATE = os.getenv('DEFAULT_END_DATE', '2023-12-31')
+    # Default date range - updated to 2024
+    DEFAULT_START_DATE = os.getenv('DEFAULT_START_DATE', '2024-01-01')
+    DEFAULT_END_DATE = os.getenv('DEFAULT_END_DATE', '2024-12-31')
     
     # Cloud cover threshold (0-100)
     MAX_CLOUD_COVER = int(os.getenv('MAX_CLOUD_COVER', '20'))
@@ -50,6 +50,15 @@ class Settings:
             raise ValueError(
                 "EE_PROJECT is not set. Please run setup_env.py or set it in your .env file."
             )
+        
+        # Validate service account credentials path if provided
+        if cls.GOOGLE_APPLICATION_CREDENTIALS:
+            creds_path = Path(cls.GOOGLE_APPLICATION_CREDENTIALS)
+            if not creds_path.exists():
+                raise ValueError(
+                    f"GOOGLE_APPLICATION_CREDENTIALS file not found: {cls.GOOGLE_APPLICATION_CREDENTIALS}"
+                )
+        
         return True
 
 

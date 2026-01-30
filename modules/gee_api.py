@@ -7,7 +7,7 @@ to fetch and process satellite imagery data.
 
 import ee
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 
 def initialize_ee(project_id: Optional[str] = None):
@@ -186,13 +186,14 @@ def get_collection_date_range(collection: ee.ImageCollection) -> Tuple[str, str]
         collection: Image collection
         
     Returns:
-        Tuple of (earliest_date, latest_date) as ISO format strings
+        Tuple of (earliest_date, latest_date) as ISO format strings,
+        or (None, None) if collection is empty
     """
     dates = collection.aggregate_array('system:time_start')
     date_list = dates.getInfo()
     
     if not date_list:
-        return ("No images", "No images")
+        return (None, None)
     
     earliest = datetime.fromtimestamp(min(date_list) / 1000).strftime('%Y-%m-%d')
     latest = datetime.fromtimestamp(max(date_list) / 1000).strftime('%Y-%m-%d')
