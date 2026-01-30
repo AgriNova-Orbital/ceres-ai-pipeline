@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  earth-engine:
+    build: .
+    image: earth-engine-app:latest
+    container_name: earth-engine-app
+    env_file:
+      - .env
+    volumes:
+      # Mount data directory for exports
+      - ./data:/app/data
+      # Mount logs directory
+      - ./logs:/app/logs
+    environment:
+      # Override specific environment variables if needed
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    # Uncomment to expose Flask port if running a web service
+    # ports:
+    #   - "5000:5000"
