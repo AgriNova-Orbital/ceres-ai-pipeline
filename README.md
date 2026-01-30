@@ -1,335 +1,176 @@
-# ActInSpace-Orbital-Strategists
+# ActInSpace Orbital Strategists 🛰️
 
-A Python application for leveraging Google Earth Engine API to fetch and process geospatial satellite data, specifically designed for orbital data analysis using Sentinel-2 imagery.
+**Demo Project for ActInSpace Hackathon - Quest CNES #2**
 
-## Features
+A Python-based demonstration of satellite orbital mechanics, featuring calculations and visualizations of various Earth orbits. This project showcases orbital dynamics concepts relevant to space mission planning and satellite deployment strategies.
 
-- **Google Earth Engine Integration**: Seamless interaction with Earth Engine API for satellite data access
-- **Sentinel-2 Data Processing**: Fetch, filter, and process Sentinel-2 imagery
-- **Area of Interest (AOI) Filtering**: Support for custom bounding box definitions
-- **Cloud Cover Filtering**: Configurable cloud cover thresholds
-- **NDVI Calculation**: Automated Normalized Difference Vegetation Index computation
-- **Image Compositing**: Create median composites from image collections
-- **Export Functionality**: Export processed imagery to Google Drive
-- **Environment Management**: Easy setup with environment variable configuration
-- **Docker Support**: Containerized deployment option
+## 🌟 Features
 
-## Project Structure
+- **Orbital Mechanics Calculator**: Compute key orbital parameters including velocity, period, and angular velocity
+- **Orbit Type Classification**: Automatically identify orbit types (LEO, MEO, GEO, etc.)
+- **2D & 3D Visualizations**: Generate beautiful visualizations of satellite orbits around Earth
+- **Comparative Analysis**: Compare multiple orbits side-by-side
+- **Interactive Demo**: Explore calculations for real satellites (ISS, Starlink, GPS, etc.)
 
-```
-ActInSpace-Orbital-Strategists/
-├── config/                 # Configuration settings
-│   ├── __init__.py
-│   └── settings.py        # Centralized configuration using environment variables
-├── modules/               # Core API implementations
-│   ├── __init__.py
-│   └── gee_api.py        # Google Earth Engine API functions
-├── utils/                 # Utility functions
-│   ├── __init__.py
-│   └── visualization.py  # Data visualization and formatting utilities
-├── main.py               # Application entry point
-├── setup_env.py          # Environment setup script
-├── requirements.txt      # Python dependencies
-├── Dockerfile           # Docker configuration
-├── .env.example         # Environment variable template
-└── README.md            # This file
-```
+## 🚀 Quick Start
 
-## Prerequisites
+### Prerequisites
 
 - Python 3.8 or higher
-- Google Earth Engine account ([Sign up here](https://earthengine.google.com/))
-- Google Cloud Project with Earth Engine API enabled
+- pip (Python package manager)
 
-## Installation
+### Installation
 
-### 1. Clone the Repository
-
+1. Clone the repository:
 ```bash
 git clone https://github.com/ben001109/ActInSpace-Orbital-Strategists.git
 cd ActInSpace-Orbital-Strategists
 ```
 
-### 2. Install Dependencies
+### Running the Demo
 
+Run the main demonstration:
 ```bash
-pip install -r requirements.txt
-```
-
-### 3. Authenticate with Earth Engine
-
-```bash
-earthengine authenticate
-```
-
-Follow the prompts to authenticate with your Google account.
-
-### 4. Configure Environment Variables
-
-Run the setup script to create your `.env` file:
-
-```bash
-python setup_env.py
-```
-
-Or manually copy `.env.example` to `.env` and fill in your credentials:
-
-```bash
-cp .env.example .env
-# Edit .env with your favorite editor
-```
-
-## Configuration
-
-The application uses environment variables for configuration. Key settings include:
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `EE_PROJECT` | Google Earth Engine Project ID | Yes | - |
-| `DEFAULT_AOI` | Default bounding box (lon_min,lat_min,lon_max,lat_max) | No | `-122.5,37.7,-122.0,37.9` |
-| `DEFAULT_START_DATE` | Default start date (YYYY-MM-DD) | No | `2023-01-01` |
-| `DEFAULT_END_DATE` | Default end date (YYYY-MM-DD) | No | `2023-12-31` |
-| `MAX_CLOUD_COVER` | Maximum cloud cover percentage (0-100) | No | `20` |
-| `GOOGLE_API_KEY` | Google API Key | No | - |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account JSON | No | - |
-
-## Usage
-
-### Basic Usage
-
-Run the main application to fetch and process Sentinel-2 data:
-
-```bash
-python main.py
+python demo.py
 ```
 
 This will:
-1. Initialize Earth Engine with your credentials
-2. Fetch Sentinel-2 images for the configured AOI and date range
-3. Filter by cloud cover percentage
-4. Create a median composite
-5. Calculate NDVI
-6. Display processing summary
+- Calculate orbital parameters for ISS, Starlink, GPS, and geostationary satellites
+- Compare different orbit types
+- Generate visualization images (saved as PNG files)
+- Offer interactive custom orbit calculations
 
-### Programmatic Usage
+## 📊 Example Output
 
-You can also use the modules programmatically in your own scripts:
+The demo calculates and displays:
+
+```
+📡 ISS (International Space Station)
+--------------------------------------------------------------------------------
+Orbital Parameters:
+  Altitude: 408.00 km
+  Orbital Radius: 6779.00 km
+  Orbital Velocity: 7.667 km/s
+  Orbital Period: 92.68 minutes (1.54 hours)
+  Orbit Type: Low Earth Orbit (LEO)
+
+  Fun Facts:
+    - Travels 27601 km every hour
+    - Completes 15.5 orbits per day
+```
+
+## 🎯 Use Cases
+
+This project demonstrates practical applications for:
+
+- **Mission Planning**: Calculate optimal orbital parameters for satellite deployment
+- **Space Situational Awareness**: Understand different orbital regimes
+- **Educational Tool**: Learn orbital mechanics through interactive examples
+- **Orbit Comparison**: Evaluate trade-offs between different orbital altitudes
+
+## 📚 Module Documentation
+
+### OrbitalCalculator
+
+The core calculation engine for orbital mechanics:
 
 ```python
-from config.settings import settings
-from modules import gee_api
+from orbital_calculator import OrbitalCalculator
 
-# Initialize Earth Engine
-gee_api.initialize_ee(settings.EE_PROJECT)
+# Create calculator for 400 km altitude
+calc = OrbitalCalculator(altitude_km=400)
 
-# Create AOI
-aoi = gee_api.create_aoi([-122.5, 37.7, -122.0, 37.9])
+# Get orbital parameters
+velocity = calc.calculate_orbital_velocity()  # km/s
+period = calc.calculate_orbital_period()      # minutes
+orbit_type = calc.get_orbit_type()            # orbit classification
 
-# Fetch Sentinel-2 data
-collection = gee_api.get_sentinel2_collection(
-    aoi=aoi,
-    start_date='2023-06-01',
-    end_date='2023-06-30',
-    max_cloud_cover=10
-)
-
-# Create median composite
-composite = gee_api.get_median_composite(collection)
-
-# Calculate NDVI
-composite_ndvi = gee_api.calculate_ndvi(composite)
-
-# Export to Google Drive
-task = gee_api.export_to_drive(
-    image=composite_ndvi,
-    description='my_export',
-    folder='EarthEngine',
-    region=aoi,
-    scale=30
-)
+# Get all info at once
+info = calc.get_orbital_info()
+print(calc)  # Pretty-printed summary
 ```
 
-### Export to Google Drive
+### SatelliteVisualizer
 
-To export processed imagery:
+Generate orbit visualizations:
 
 ```python
-from modules import gee_api
+from satellite_visualizer import SatelliteVisualizer
 
-# Create your image (e.g., composite)
-# ...
+# Create visualizer
+viz = SatelliteVisualizer(calc)
 
-# Export
-task = gee_api.export_to_drive(
-    image=my_image,
-    description='sentinel2_export',
-    folder='EarthEngine',
-    region=aoi,
-    scale=30,  # meters per pixel
-    crs='EPSG:4326'
-)
+# Generate 2D plot
+fig_2d = viz.plot_2d_orbit()
+fig_2d.savefig('orbit_2d.png')
 
-# Monitor at: https://code.earthengine.google.com/tasks
+# Generate 3D plot with 51.6° inclination (like ISS)
+fig_3d = viz.plot_3d_orbit(inclination_deg=51.6)
+fig_3d.savefig('orbit_3d.png')
+
+# Compare multiple orbits
+altitudes = [400, 20200, 35786]
+labels = ["LEO", "MEO", "GEO"]
+fig_compare = viz.compare_orbits(altitudes, labels)
+fig_compare.savefig('comparison.png')
 ```
 
-## Docker Deployment
+## 🔬 Orbital Types Classified
 
-### Build Docker Image
+| Type | Altitude Range | Examples |
+|------|---------------|----------|
+| Very Low Earth Orbit (VLEO) | < 200 km | Experimental satellites |
+| Low Earth Orbit (LEO) | 200 - 2,000 km | ISS, Starlink, Hubble |
+| Medium Earth Orbit (MEO) | 2,000 - 35,586 km | GPS, Galileo, GLONASS |
+| Geostationary Orbit (GEO) | ~35,786 km | Communication satellites |
+| High Earth Orbit (HEO) | > 35,986 km | Some scientific satellites |
 
-```bash
-docker build -t earth-engine-app .
-```
+## 🛠️ Technical Details
 
-### Run Docker Container
+### Constants Used
 
-```bash
-docker run --env-file .env earth-engine-app
-```
+- **Earth Radius**: 6,371 km (mean radius)
+- **Earth's Gravitational Parameter (μ)**: 398,600.4418 km³/s²
 
-Or with custom environment variables:
+### Formulas Implemented
 
-```bash
-docker run -e EE_PROJECT=your-project-id -e MAX_CLOUD_COVER=15 earth-engine-app
-```
+- **Orbital Velocity**: v = √(μ/r)
+- **Orbital Period**: T = 2π√(r³/μ)
+- **Angular Velocity**: ω = 2π/T
 
-### Docker Compose (Optional)
+Where:
+- μ = Earth's gravitational parameter
+- r = orbital radius (Earth radius + altitude)
 
-Create a `docker-compose.yml`:
+## 🎓 Educational Resources
 
-```yaml
-version: '3.8'
-services:
-  earth-engine:
-    build: .
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-```
+This demo is designed for the ActInSpace Hackathon and showcases:
 
-Run with:
+1. **Kepler's Laws**: Understanding circular orbit mechanics
+2. **Orbital Velocity**: How speed varies with altitude
+3. **Orbital Period**: Relationship between altitude and orbit time
+4. **Practical Applications**: Real-world satellite examples
 
-```bash
-docker-compose up
-```
+## 📄 License
 
-## API Reference
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### modules.gee_api
+## 👥 Team: Orbital Strategists
 
-#### `initialize_ee(project_id)`
-Initialize Earth Engine with authentication.
+Created for **ActInSpace Hackathon - Quest CNES #2**
 
-#### `create_aoi(bbox)`
-Create an Area of Interest from bounding box coordinates.
+- Demonstrating orbital mechanics concepts
+- Providing tools for space mission analysis
+- Supporting education in space technology
 
-#### `get_sentinel2_collection(aoi, start_date, end_date, max_cloud_cover)`
-Fetch Sentinel-2 image collection for given parameters.
+## 🤝 Contributing
 
-#### `get_median_composite(collection)`
-Create a median composite from an image collection.
+This is a hackathon demonstration project. Suggestions and improvements are welcome!
 
-#### `calculate_ndvi(image)`
-Calculate Normalized Difference Vegetation Index.
+## 📞 Contact
 
-#### `export_to_drive(image, description, folder, region, scale, crs)`
-Export an image to Google Drive.
+For questions about this demo project, please open an issue on GitHub.
 
-#### `get_image_info(image)`
-Get information about an image.
+---
 
-#### `get_collection_date_range(collection)`
-Get the date range of images in a collection.
-
-## Troubleshooting
-
-### Authentication Issues
-
-If you encounter authentication errors:
-
-1. Run `earthengine authenticate` again
-2. Ensure your `EE_PROJECT` is set correctly
-3. Verify your account has access to Earth Engine
-
-### No Images Found
-
-If no images are returned:
-
-1. Check your date range is valid
-2. Try increasing `MAX_CLOUD_COVER`
-3. Verify your AOI coordinates are correct (lon, lat format)
-4. Ensure the AOI is within Sentinel-2 coverage area
-
-### Import Errors
-
-If you get module import errors:
-
-```bash
-pip install --upgrade -r requirements.txt
-```
-
-## Development
-
-### Adding New Datasets
-
-To add support for other datasets (Landsat, MODIS, etc.), create new functions in `modules/gee_api.py`:
-
-```python
-def get_landsat8_collection(aoi, start_date, end_date, max_cloud_cover=20):
-    """Fetch Landsat 8 image collection."""
-    collection = (ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
-                  .filterBounds(aoi)
-                  .filterDate(start_date, end_date)
-                  .filter(ee.Filter.lt('CLOUD_COVER', max_cloud_cover)))
-    return collection
-```
-
-### Running Tests
-
-(Tests to be implemented in future updates)
-
-```bash
-python -m pytest tests/
-```
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-See [LICENSE](LICENSE) file for details.
-
-## Resources
-
-- [Google Earth Engine Documentation](https://developers.google.com/earth-engine)
-- [Sentinel-2 Data Information](https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR)
-- [geemap Documentation](https://geemap.org/)
-
-## Support
-
-For issues and questions:
-- Open an issue on GitHub
-- Check existing documentation
-- Review Earth Engine API documentation
-
-## Roadmap
-
-- [ ] Add support for Landsat datasets
-- [ ] Add support for MODIS datasets
-- [ ] Implement interactive UI for parameter input
-- [ ] Add automated testing suite
-- [ ] Create visualization dashboard
-- [ ] Add time-series analysis tools
-- [ ] Implement machine learning integration
-
-## Acknowledgments
-
-- Google Earth Engine Team
-- Sentinel-2 Mission (ESA)
-- geemap library contributors
+**🚀 Happy Orbiting! 🌍**
