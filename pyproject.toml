@@ -1,0 +1,35 @@
+[project]
+name = "actinspace-orbital-strategists"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "earthengine-api>=0.1.384",
+    "flask>=3.0.0",
+    "geemap>=0.30.0",
+    "google-auth>=2.25.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.0",
+    "matplotlib>=3.7.0",
+    "numpy>=1.24.0",
+    "python-dotenv>=1.0.0",
+    "rasterio>=1.4.4",
+    "skyfield>=1.46",
+    "tqdm>=4.67.2",
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch>=2.2",
+]
+distributed = [
+    "ray[default]",
+    "ray[train]",
+    "zstandard>=0.23.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+]
