@@ -21,7 +21,9 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-    "torch>=2.2",
+    "torch==2.5.1+cu121",
+    "torchvision==0.20.1+cu121",
+    "torchaudio==2.5.1+cu121",
 ]
 distributed = [
     "ray[default]",
@@ -33,3 +35,17 @@ distributed = [
 dev = [
     "pytest>=9.0.0",
 ]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchvision = { index = "pytorch-cu121" }
+torchaudio = { index = "pytorch-cu121" }
+tqdm = { index = "pypi" }
