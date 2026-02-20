@@ -244,3 +244,83 @@ Add usage snippets and artifact paths in `docs/WHEAT_RISK_PIPELINE.md`.
 git add docs/WHEAT_RISK_PIPELINE.md
 git commit -m "docs: add inventory and staged matrix workflow"
 ```
+
+### Task 6: WebUI Job Progress Events (CLI-Compatible)
+
+**Goal:** Add a machine-readable progress event stream so the WebUI progress bar uses the same counting logic as CLI progress (no time-based guessing).
+
+**Architecture:** Each long-running action emits JSONL progress events to stdout (or a side-channel file). The API runner parses and persists these events; the WebUI subscribes via SSE/WebSocket and renders determinate/indeterminate progress bars. Counting logic matches the CLI source-of-truth totals (e.g., patches, files, runs).
+
+**Files:**
+- Create: `modules/wheat_risk/progress_events.py`
+- Create: `modules/wheat_risk/job_runner.py`
+- Modify: `scripts/build_npz_dataset_from_geotiffs.py`
+- Modify: `scripts/ray_train_submit.py`
+- Test: `tests/test_progress_events.py`
+- Test: `tests/test_job_runner_parses_progress.py`
+
+**Step 1: Write the failing tests**
+
+`tests/test_progress_events.py`
+
+```python
+def test_emit_progress_jsonl_line_parses():
+    line = emit_progress(phase="build_npz", done=3, total=10, unit="patch")
+    obj = json.loads(line)
+    assert obj["type"] == "progress"
+    assert obj["phase"] == "build_npz"
+    assert obj["done"] == 3
+    assert obj["total"] == 10
+```
+
+`tests/test_job_runner_parses_progress.py`
+
+```python
+def test_runner_extracts_latest_progress_from_mixed_stdout():
+    out = "hello\n" + emit_progress("sync_drive", 1, 5, "file") + "\nbye\n"
+    state = parse_progress_stream(out.splitlines())
+    assert state.phase == "sync_drive"
+    assert state.done == 1 and state.total == 5
+```
+
+**Step 2: Run tests to verify they fail**
+
+Run: `uv run --dev pytest tests/test_progress_events.py tests/test_job_runner_parses_progress.py -q`
+Expected: FAIL (missing modules/functions).
+
+**Step 3: Minimal implementation**
+
+Implement a tiny JSONL schema and helpers:
+
+```python
+def emit_progress(*, phase: str, done: int | None, total: int | None, unit: str) -> str:
+    return json.dumps({"type":"progress","phase":phase,"done":done,"total":total,"unit":unit})
+```
+
+And a parser that reads stdout lines and keeps the latest progress state.
+
+**Step 4: Instrument CLI actions with the same counting logic**
+
+- `scripts/build_npz_dataset_from_geotiffs.py`
+  - total = number of patch locations
+  - done increments per patch processed
+  - emit at a fixed interval (e.g. every N patches or every second)
+
+- `scripts/ray_train_submit.py`
+  - total = runs
+  - done increments per completed run
+  - emit on each completion
+
+**Step 5: Run tests to verify they pass**
+
+Run: `uv run --dev pytest tests/test_progress_events.py tests/test_job_runner_parses_progress.py -q`
+Expected: PASS.
+
+**Step 6: Commit**
+
+```bash
+git add modules/wheat_risk/progress_events.py modules/wheat_risk/job_runner.py \
+  scripts/build_npz_dataset_from_geotiffs.py scripts/ray_train_submit.py \
+  tests/test_progress_events.py tests/test_job_runner_parses_progress.py
+git commit -m "feat: add JSONL progress events for WebUI"
+```
