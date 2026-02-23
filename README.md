@@ -46,6 +46,9 @@ uv run scripts/export_wheat_patches.py --stage 1 --dry-run
 
 # Model training CLI
 uv run scripts/train_wheat_risk_lstm.py --help
+
+# Experimental Sentinel-2 STAC quicklook (local test)
+uv run scripts/experimental/sentinel2_stac_ml_pipeline.py --no-show
 ```
 
 ### Expanding Source Time Range (Operational Checklist)
