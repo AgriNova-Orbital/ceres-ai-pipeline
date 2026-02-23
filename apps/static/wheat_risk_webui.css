@@ -1,0 +1,168 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Noto Sans", sans-serif;
+  background: linear-gradient(180deg, #f4f4ef 0%, #e7edf2 100%);
+  color: #1d2a33;
+}
+
+header {
+  padding: 1rem 1.25rem;
+  background: #123243;
+  color: #f7f6f2;
+}
+
+header h1 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.4rem;
+}
+
+.sub {
+  margin: 0 0 0.75rem 0;
+  opacity: 0.9;
+}
+
+.mode-form {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  background: #d3dde5;
+  border-bottom: 1px solid #b3c0c9;
+}
+
+nav a {
+  color: #11313f;
+  text-decoration: none;
+  padding: 0.3rem 0.55rem;
+  background: #eef3f7;
+  border-radius: 6px;
+}
+
+main {
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  background: #ffffffd9;
+  border: 1px solid #d6dfe6;
+  border-radius: 10px;
+  padding: 0.85rem;
+}
+
+h2, h3 {
+  margin-top: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.span2 {
+  grid-column: span 2;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.92rem;
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.45rem;
+  border: 1px solid #b7c5cf;
+  border-radius: 6px;
+}
+
+button {
+  cursor: pointer;
+  background: #185574;
+  color: #fff;
+  border: none;
+}
+
+button:hover {
+  background: #14455e;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.preview {
+  width: 100%;
+  min-height: 220px;
+  background: #0d1117;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+th,
+td {
+  border: 1px solid #ced9e1;
+  padding: 0.35rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.flash-list {
+  padding: 0.8rem 1rem 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.flash {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.flash.success {
+  background: #daf2e4;
+  color: #155f37;
+}
+
+.flash.error {
+  background: #fbe5e5;
+  color: #8b2323;
+}
+
+@media (max-width: 900px) {
+  .grid,
+  .grid.compact,
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span2 {
+    grid-column: span 1;
+  }
+}
