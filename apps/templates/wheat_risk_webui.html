@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wheat Risk WebUI Prototype</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='wheat_risk_webui.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Wheat Risk WebUI</h1>
+    <p class="sub">MVP prototype - dual mode + shared LAN workflow</p>
+    <form class="mode-form" method="get" action="{{ url_for('home') }}">
+      <label for="mode">UI Mode</label>
+      <select id="mode" name="mode" onchange="this.form.submit()">
+        <option value="basic" {{ 'selected' if mode == 'basic' else '' }}>Basic</option>
+        <option value="advanced" {{ 'selected' if mode == 'advanced' else '' }}>Advanced</option>
+      </select>
+    </form>
+  </header>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+  {% if msgs %}
+  <section class="flash-list">
+    {% for cat, msg in msgs %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% endwith %}
+
+  <nav>
+    <a href="#downloader">Data Downloader</a>
+    <a href="#acquisition">Data Acquisition</a>
+    <a href="#build">Dataset Build</a>
+    <a href="#training">Training Matrix</a>
+    <a href="#evaluation">Evaluation</a>
+    <a href="#runs">Run History</a>
+  </nav>
+
+  <main>
+    <section id="downloader" class="card">
+      <h2>Data Downloader</h2>
+      <form method="post" action="{{ url_for('run_downloader') }}" class="grid">
+        <label>Action
+          <select name="action">
+            <option value="preview_export">Preview Export Plan</option>
+            <option value="run_export">Start Export</option>
+            <option value="refresh_inventory">Refresh Inventory</option>
+          </select>
+        </label>
+        <label>Stage <input name="stage" value="1"></label>
+        <label>Start Date <input name="start_date" value="2025-01-01"></label>
+        <label>End Date <input name="end_date" value="2025-12-31"></label>
+        <label>Limit <input name="limit" value="4"></label>
+        <label>EE Project <input name="ee_project" placeholder="my-gee-project"></label>
+        <label>Drive Folder <input name="drive_folder" value="EarthEngine"></label>
+        <label class="span2">Raw Dir <input name="raw_dir" value="data/raw/france_2025_weekly"></label>
+        <button type="submit" class="span2">Run Downloader Action</button>
+      </form>
+    </section>
+
+    <section id="acquisition" class="card">
+      <h2>Image Preview</h2>
+      <div class="preview-grid">
+        <div>
+          <h3>Raw GeoTIFF Quicklook</h3>
+          <form id="raw-preview-form" class="grid compact" onsubmit="return setRawPreview()">
+            <label class="span2">File Path <input id="raw_path" placeholder="/abs/path/to/file.tif"></label>
+            <label>Bands <input id="raw_bands" value="1,2,3"></label>
+            <label>Max Size <input id="raw_size" value="512"></label>
+            <button type="submit" class="span2">Preview Raw</button>
+          </form>
+          <img id="raw_preview_img" class="preview" alt="Raw preview appears here">
+        </div>
+        <div>
+          <h3>Patch NPZ Quicklook</h3>
+          <form id="patch-preview-form" class="grid compact" onsubmit="return setPatchPreview()">
+            <label class="span2">File Path <input id="patch_path" placeholder="/abs/path/to/sample.npz"></label>
+            <label>t index <input id="patch_t" value="0"></label>
+            <label>channels <input id="patch_channels" value="0,1,2"></label>
+            <button type="submit" class="span2">Preview Patch</button>
+          </form>
+          <img id="patch_preview_img" class="preview" alt="Patch preview appears here">
+        </div>
+      </div>
+    </section>
+
+    <section id="build" class="card">
+      <h2>Dataset Build</h2>
+      <form method="post" action="{{ url_for('run_build') }}" class="grid">
+        <label>Action
+          <select name="action">
+            <option value="build_level">Build One Level</option>
+            <option value="build_all">Build All Levels</option>
+          </select>
+        </label>
+        <label>Level <input name="level" value="1"></label>
+        <label class="span2">Raw Dir <input name="raw_dir" value="data/raw/france_2025_weekly"></label>
+        <label>Max Patches <input name="max_patches" value="12000"></label>
+        <button type="submit">Run Build</button>
+      </form>
+    </section>
+
+    <section id="training" class="card">
+      <h2>Training Matrix</h2>
+      <form method="post" action="{{ url_for('run_train_matrix') }}" class="grid">
+        <label>Action
+          <select name="action">
+            <option value="dry_run">Dry Run</option>
+            <option value="execute_train">Execute Train</option>
+          </select>
+        </label>
+        <label>Levels <input name="levels" value="1,2,4"></label>
+        <label>Steps <input name="steps" value="100,500,2000"></label>
+        <button type="submit">Run Matrix</button>
+      </form>
+    </section>
+
+    <section id="evaluation" class="card">
+      <h2>Evaluation & Model Selection</h2>
+      <form method="post" action="{{ url_for('run_eval') }}">
+        <button type="submit">Run Evaluation</button>
+      </form>
+    </section>
+
+    <section id="runs" class="card">
+      <h2>Run History</h2>
+      <p>Repo root: <code>{{ repo_root }}</code></p>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Section</th>
+            <th>Action</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Ended</th>
+            <th>Command</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in jobs %}
+          <tr>
+            <td>{{ j.id }}</td>
+            <td>{{ j.section }}</td>
+            <td>{{ j.action }}</td>
+            <td>{{ 'ok' if j.returncode == 0 else ('fail ' ~ j.returncode) }}</td>
+            <td>{{ j.started_at }}</td>
+            <td>{{ j.ended_at }}</td>
+            <td><code>{{ ' '.join(j.command) }}</code></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    function setRawPreview() {
+      const path = document.getElementById('raw_path').value;
+      const bands = document.getElementById('raw_bands').value;
+      const size = document.getElementById('raw_size').value;
+      const img = document.getElementById('raw_preview_img');
+      img.src = `/api/preview/raw?path=${encodeURIComponent(path)}&bands=${encodeURIComponent(bands)}&max_size=${encodeURIComponent(size)}`;
+      return false;
+    }
+    function setPatchPreview() {
+      const path = document.getElementById('patch_path').value;
+      const t = document.getElementById('patch_t').value;
+      const channels = document.getElementById('patch_channels').value;
+      const img = document.getElementById('patch_preview_img');
+      img.src = `/api/preview/patch?path=${encodeURIComponent(path)}&t=${encodeURIComponent(t)}&channels=${encodeURIComponent(channels)}`;
+      return false;
+    }
+  </script>
+</body>
+</html>
