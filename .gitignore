@@ -153,6 +153,9 @@ venv.bak/
 
 # Local data/artifacts
 data/
+runs/
+reports/
+backups/
 session-*.md
 
 # Rope project settings

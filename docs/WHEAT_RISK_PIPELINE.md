@@ -87,7 +87,90 @@ uv run scripts/train_wheat_risk_lstm.py \
 
 ---
 
-## 4. Internal Utilities
+## 4. Date Inventory & Missing-Date Report
+**Script**: `scripts/inventory_wheat_dates.py`
+
+### Goal
+Build a 7-day cadence inventory from raw GeoTIFF filenames and report timeline completeness before training.
+
+### Usage
+```bash
+uv run scripts/inventory_wheat_dates.py \
+  --input-dir /path/to/raw_tiffs \
+  --output-dir ./reports \
+  --start-date 2025-01-01 \
+  --cadence-days 7
+```
+
+### Expected Results
+- `reports/data_inventory.json`
+  - `earliest_date`, `latest_date`, `total_days`
+  - `expected_nodes`, `observed_nodes`, `missing_count`, `missing_rate`
+- `reports/missing_dates.csv`
+  - columns: `date`, `position`, `reason`
+
+---
+
+## 5. 2D Staged Training Matrix (Nested Loop)
+**Script**: `scripts/run_staged_training_matrix.py`
+
+### Goal
+Generate and execute a strict nested-loop plan:
+- Outer loop: image granularity levels
+- Inner loop: sample-size steps
+
+### Usage
+```bash
+# Dry-run (recommended first): print exact execution order
+uv run scripts/run_staged_training_matrix.py \
+  --dry-run \
+  --levels 1,2,4 \
+  --steps 100,500,2000 \
+  --base-patch 64
+
+# Plan artifacts mode (creates per-cell directories and summary CSV)
+uv run scripts/run_staged_training_matrix.py \
+  --run \
+  --levels 1,2,4 \
+  --steps 100,500,2000 \
+  --base-patch 64
+
+# Execute training per matrix cell (nested loop order)
+uv run scripts/run_staged_training_matrix.py \
+  --run \
+  --execute-train \
+  --levels 1,2,4 \
+  --steps 100,500,2000 \
+  --base-patch 64 \
+  --index-csv ./data/wheat_risk/stage1/index.csv \
+  --root-dir ./data/wheat_risk/stage1 \
+  --device cuda
+
+# Execute training with per-level datasets (recommended for true granularity sweep)
+uv run scripts/run_staged_training_matrix.py \
+  --run \
+  --execute-train \
+  --levels 1,2,4 \
+  --steps 100,500,2000 \
+  --base-patch 64 \
+  --index-csv-template ./data/wheat_risk/staged/L{level}/index.csv \
+  --root-dir-template ./data/wheat_risk/staged/L{level} \
+  --device cuda
+```
+
+### Expected Results
+- Nested order:
+  - `L1-S100 -> L1-S500 -> L1-S2000 -> L2-S100 -> ... -> L4-S2000`
+- Artifacts in `runs/staged/`:
+  - `runs/staged/Lx/Sy/config.json`
+  - `runs/staged/Lx/Sy/train_subset.csv`
+  - `runs/staged/Lx/Sy/train.log`
+  - `runs/staged/Lx/Sy/model.pt`
+  - `runs/staged/summary.csv`
+
+---
+
+## 6. Internal Utilities
 **Module**: `modules/wheat_risk/data_cache.py`
 
 ### Goal
