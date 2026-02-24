@@ -17,6 +17,9 @@ dependencies = [
     "rasterio>=1.4.4",
     "skyfield>=1.46",
     "tqdm>=4.67.2",
+    "gunicorn>=22.0.0",
+    "redis>=5.0.0",
+    "rq>=1.16.0",
 ]
 
 [project.optional-dependencies]
