@@ -122,10 +122,12 @@ WebUI planning reference (including data acquisition interface):
 
 ### Wheat Risk WebUI Prototype
 
-Launch the MVP WebUI prototype:
+Launch the main application, which runs both the WebUI and the background job runner.
+
+**Note:** This requires a Redis server to be running for task queue management.
 
 ```bash
-uv run apps/wheat_risk_webui.py
+uv run scripts/main.py
 ```
 
 Then open:
