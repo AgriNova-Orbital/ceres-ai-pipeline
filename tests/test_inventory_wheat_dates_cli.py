@@ -59,7 +59,7 @@ def test_inventory_cli_writes_json_and_missing_csv(tmp_path: Path) -> None:
 
 
 def test_parse_temporal_filename_supports_underscore_suffixes() -> None:
-    from scripts.inventory_wheat_dates import _parse_temporal_filename
+    from modules.services.inventory_service import _parse_temporal_filename
 
     parsed_week = _parse_temporal_filename("fr_wheat_feat_2025_data_tile_W03.tif")
     assert parsed_week is not None
