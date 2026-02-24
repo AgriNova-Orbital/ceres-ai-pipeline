@@ -134,7 +134,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         queue = get_queue()
         job = queue.enqueue(
             "modules.jobs.tasks.run_script",
-            cmd,
+            args=(cmd,),
             job_timeout="1h",
             result_ttl="7d",
             kwargs={"cwd": str(app.config["REPO_ROOT"])},

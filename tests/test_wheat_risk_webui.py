@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -81,19 +81,11 @@ def test_downloader_preview_runs_dry_run_command(
 ) -> None:
     from apps.wheat_risk_webui import create_app
 
-    class _P:
-        returncode = 0
-        stdout = "ok"
-        stderr = ""
-
-    seen: dict[str, object] = {}
-
-    def _fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
-        seen["cmd"] = cmd
-        seen["kwargs"] = kwargs
-        return _P()
-
-    monkeypatch.setattr(subprocess, "run", _fake_run)
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-1"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue", lambda: mock_queue)
 
     app = create_app(repo_root=tmp_path)
     client = app.test_client()
@@ -112,7 +104,9 @@ def test_downloader_preview_runs_dry_run_command(
     )
 
     assert resp.status_code == 200
-    cmd = seen["cmd"]
+    mock_queue.enqueue.assert_called_once()
+    _, kwargs = mock_queue.enqueue.call_args
+    cmd = kwargs["args"][0]
     assert isinstance(cmd, list)
     assert "scripts/export_weekly_risk_rasters.py" in cmd
     assert "--dry-run" in cmd
