@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import io
-import subprocess
+from redis import Redis
+from rq import Queue
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,15 +24,17 @@ from flask import (
 
 @dataclass(frozen=True, slots=True)
 class JobRecord:
-    id: int
+    id: str
     section: str
     action: str
     command: list[str]
-    returncode: int
-    started_at: str
-    ended_at: str
-    stdout: str
-    stderr: str
+    status: str
+    enqueued_at: str
+
+
+def get_queue() -> Queue:
+    # In a real app, this would be configured
+    return Queue(connection=Redis())
 
 
 def _now_iso() -> str:
@@ -125,56 +129,28 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     app.config["SECRET_KEY"] = "wheat-risk-webui-dev"
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
-    app.config["NEXT_JOB_ID"] = 1
-
-    def _append_job(
-        *,
-        section: str,
-        action: str,
-        command: list[str],
-        returncode: int,
-        started_at: str,
-        ended_at: str,
-        stdout: str,
-        stderr: str,
-    ) -> None:
-        jid = int(app.config["NEXT_JOB_ID"])
-        app.config["NEXT_JOB_ID"] = jid + 1
-        rec = JobRecord(
-            id=jid,
-            section=section,
-            action=action,
-            command=command,
-            returncode=int(returncode),
-            started_at=started_at,
-            ended_at=ended_at,
-            stdout=stdout,
-            stderr=stderr,
-        )
-        app.config["JOB_HISTORY"].insert(0, rec)
-        app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
 
     def _run_job(section: str, action: str, cmd: list[str]) -> JobRecord:
-        started = _now_iso()
-        proc = subprocess.run(
+        queue = get_queue()
+        job = queue.enqueue(
+            "modules.jobs.tasks.run_script",
             cmd,
-            cwd=str(app.config["REPO_ROOT"]),
-            text=True,
-            capture_output=True,
-            check=False,
+            job_timeout="1h",
+            result_ttl="7d",
+            kwargs={"cwd": str(app.config["REPO_ROOT"])},
+            description=f"{section}: {action}",
         )
-        ended = _now_iso()
-        _append_job(
+        rec = JobRecord(
+            id=job.id,
             section=section,
             action=action,
             command=cmd,
-            returncode=int(proc.returncode),
-            started_at=started,
-            ended_at=ended,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            status="enqueued",
+            enqueued_at=_now_iso(),
         )
-        return app.config["JOB_HISTORY"][0]
+        app.config["JOB_HISTORY"].insert(0, rec)
+        app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
+        return rec
 
     @app.get("/")
     def home() -> str:
@@ -190,18 +166,21 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.get("/api/jobs")
     def jobs_json() -> Response:
-        rows = [
-            {
-                "id": j.id,
-                "section": j.section,
-                "action": j.action,
-                "command": " ".join(j.command),
-                "returncode": j.returncode,
-                "started_at": j.started_at,
-                "ended_at": j.ended_at,
-            }
-            for j in app.config["JOB_HISTORY"]
-        ]
+        q = get_queue()
+        rows = []
+        for rec in app.config["JOB_HISTORY"]:
+            job = q.fetch_job(rec.id)
+            status = job.get_status() if job else "unknown"
+            rows.append(
+                {
+                    "id": rec.id,
+                    "section": rec.section,
+                    "action": rec.action,
+                    "command": " ".join(rec.command),
+                    "status": status,
+                    "enqueued_at": rec.enqueued_at,
+                }
+            )
         return jsonify(rows)
 
     @app.post("/run/downloader")
@@ -255,13 +234,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             flash(f"Unknown downloader action: {action}", "error")
             return redirect(url_for("home"))
 
-        rec = _run_job("downloader", action, cmd)
-        if rec.returncode == 0:
-            flash(f"Downloader action '{action}' finished successfully.", "success")
-        else:
-            flash(
-                f"Downloader action '{action}' failed (code {rec.returncode}).", "error"
-            )
+        _run_job("downloader", action, cmd)
+        flash(f"Downloader action '{action}' enqueued.", "success")
         return redirect(url_for("home"))
 
     @app.post("/run/build")
@@ -292,25 +266,14 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             ]
 
         if action == "build_level":
-            rec = _run_job("build", action, _cmd_for_level(stage))
-            flash(
-                f"Build L{stage} {'ok' if rec.returncode == 0 else 'failed'}.",
-                "success" if rec.returncode == 0 else "error",
-            )
+            _run_job("build", action, _cmd_for_level(stage))
+            flash(f"Build L{stage} enqueued.", "success")
             return redirect(url_for("home"))
 
         if action == "build_all":
-            fail = 0
             for lv in ["1", "2", "4"]:
-                rec = _run_job("build", f"build_L{lv}", _cmd_for_level(lv))
-                if rec.returncode != 0:
-                    fail += 1
-            flash(
-                "Build all completed."
-                if fail == 0
-                else f"Build all finished with {fail} failure(s).",
-                "success" if fail == 0 else "error",
-            )
+                _run_job("build", f"build_L{lv}", _cmd_for_level(lv))
+            flash("Build all enqueued.", "success")
             return redirect(url_for("home"))
 
         flash(f"Unknown build action: {action}", "error")
@@ -349,11 +312,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 ]
             )
 
-        rec = _run_job("train", action, cmd)
-        flash(
-            f"Training action '{action}' {'ok' if rec.returncode == 0 else 'failed'}.",
-            "success" if rec.returncode == 0 else "error",
-        )
+        _run_job("train", action, cmd)
+        flash(f"Training action '{action}' enqueued.", "success")
         return redirect(url_for("home"))
 
     @app.post("/run/eval")
@@ -375,11 +335,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "--device",
             "cuda",
         ]
-        rec = _run_job("eval", "eval_matrix", cmd)
-        flash(
-            f"Evaluation {'ok' if rec.returncode == 0 else 'failed'}.",
-            "success" if rec.returncode == 0 else "error",
-        )
+        _run_job("eval", "eval_matrix", cmd)
+        flash("Evaluation enqueued.", "success")
         return redirect(url_for("home"))
 
     @app.get("/api/preview/raw")
