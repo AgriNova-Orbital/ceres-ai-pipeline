@@ -173,12 +173,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
+    if not args.ee_project:
+        print(
+            "Hint: pass --ee-project <GCP_PROJECT_ID> (or set EE_PROJECT env var), then re-run."
+        )
+        return 2
+
     ee = require_ee("weekly risk raster export")
     try:
-        if args.ee_project:
-            ee.Initialize(project=args.ee_project)
-        else:
-            ee.Initialize()
+        ee.Initialize(project=args.ee_project)
     except Exception as e:
         msg = str(e)
         print(msg)
