@@ -144,22 +144,23 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.get("/api/jobs")
     def jobs_json() -> Response:
-        q = get_queue()
-        rows = []
-        for rec in app.config["JOB_HISTORY"]:
-            job = q.fetch_job(rec.id)
-            status = job.get_status() if job else "unknown"
-            rows.append(
-                {
-                    "id": rec.id,
-                    "section": rec.section,
-                    "action": rec.action,
-                    "command": " ".join(rec.command),
-                    "status": status,
-                    "enqueued_at": rec.enqueued_at,
-                }
-            )
-        return jsonify(rows)
+        try:
+            queue = get_queue()
+            jobs = queue.jobs
+            rows = []
+            for j in jobs:
+                rows.append(
+                    {
+                        "id": j.get_id(),
+                        "action": j.func_name,
+                        "status": j.get_status() or "unknown",
+                        "started_at": str(j.started_at) if j.started_at else "",
+                        "ended_at": str(j.ended_at) if j.ended_at else "",
+                    }
+                )
+            return jsonify(rows)
+        except Exception as e:
+            return jsonify([{"error": str(e)}])
 
     @app.post("/run/downloader")
     def run_downloader() -> Response:

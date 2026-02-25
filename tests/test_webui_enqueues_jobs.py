@@ -52,3 +52,25 @@ def test_webui_enqueues_service_tasks_instead_of_run_script(monkeypatch):
     client.post("/run/eval")
     args, _ = mock_queue.enqueue.call_args
     assert "modules.jobs.tasks.task_run_eval" in str(args[0])
+
+
+def test_job_status_endpoint_returns_json(monkeypatch):
+    from apps.wheat_risk_webui import create_app
+
+    # We need to mock redis/rq to return a dummy job
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.get_id.return_value = "dummy-id"
+    mock_job.get_status.return_value = "queued"
+    mock_job.func_name = "test_func"
+    mock_queue.jobs = [mock_job]
+
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue", lambda: mock_queue)
+
+    app = create_app()
+    client = app.test_client()
+    resp = client.get("/api/jobs")
+    assert resp.status_code == 200
+    assert isinstance(resp.json, list)
+    if len(resp.json) > 0:
+        assert "status" in resp.json[0]
