@@ -130,28 +130,6 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
 
-    def _run_job(section: str, action: str, cmd: list[str]) -> JobRecord:
-        queue = get_queue()
-        job = queue.enqueue(
-            "modules.jobs.tasks.run_script",
-            args=(cmd,),
-            job_timeout="1h",
-            result_ttl="7d",
-            kwargs={"cwd": str(app.config["REPO_ROOT"])},
-            description=f"{section}: {action}",
-        )
-        rec = JobRecord(
-            id=job.id,
-            section=section,
-            action=action,
-            command=cmd,
-            status="enqueued",
-            enqueued_at=_now_iso(),
-        )
-        app.config["JOB_HISTORY"].insert(0, rec)
-        app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
-        return rec
-
     @app.get("/")
     def home() -> str:
         mode = request.args.get("mode", "basic").strip().lower()
@@ -194,6 +172,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         drive_folder = request.form.get("drive_folder", "").strip()
         raw_dir = request.form.get("raw_dir", "data/raw/france_2025_weekly").strip()
 
+        queue = get_queue()
+
         if action in {"preview_export", "run_export"}:
             cmd = [
                 "uv",
@@ -216,25 +196,54 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 cmd.append("--dry-run")
             else:
                 cmd.append("--run")
+
+            job = queue.enqueue(
+                "modules.jobs.tasks.run_script",
+                args=(cmd,),
+                job_timeout="1h",
+                result_ttl="7d",
+                kwargs={"cwd": str(app.config["REPO_ROOT"])},
+                description=f"downloader: {action}",
+            )
+            rec = JobRecord(
+                id=job.id,
+                section="downloader",
+                action=action,
+                command=cmd,
+                status="enqueued",
+                enqueued_at=_now_iso(),
+            )
+            app.config["JOB_HISTORY"].insert(0, rec)
+            app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
+
         elif action == "refresh_inventory":
-            cmd = [
-                "uv",
-                "run",
-                "scripts/inventory_wheat_dates.py",
-                "--input-dir",
-                raw_dir,
-                "--output-dir",
-                "reports",
-                "--start-date",
-                start_date,
-                "--cadence-days",
-                "7",
-            ]
+            job_kwargs = {
+                "input_dir": raw_dir,
+                "output_dir": "reports",
+                "start_date": start_date,
+                "cadence_days": 7,
+            }
+            job = queue.enqueue(
+                "modules.jobs.tasks.task_run_inventory",
+                args=(job_kwargs,),
+                job_timeout="1h",
+                result_ttl="7d",
+                description=f"downloader: {action}",
+            )
+            rec = JobRecord(
+                id=job.id,
+                section="downloader",
+                action=action,
+                command=["task_run_inventory"],
+                status="enqueued",
+                enqueued_at=_now_iso(),
+            )
+            app.config["JOB_HISTORY"].insert(0, rec)
+            app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
         else:
             flash(f"Unknown downloader action: {action}", "error")
             return redirect(url_for("home"))
 
-        _run_job("downloader", action, cmd)
         flash(f"Downloader action '{action}' enqueued.", "success")
         return redirect(url_for("home"))
 
@@ -245,34 +254,44 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         raw_dir = request.form.get("raw_dir", "data/raw/france_2025_weekly").strip()
         max_patches = request.form.get("max_patches", "12000").strip()
 
-        def _cmd_for_level(level: str) -> list[str]:
-            patch = {"1": "64", "2": "32", "4": "16"}.get(level, "64")
-            return [
-                "uv",
-                "run",
-                "scripts/build_npz_dataset_from_geotiffs.py",
-                "--input-dir",
-                raw_dir,
-                "--output-dir",
-                f"data/wheat_risk/staged/L{level}",
-                "--patch-size",
-                patch,
-                "--step-size",
-                patch,
-                "--expected-weeks",
-                "46",
-                "--max-patches",
-                max_patches,
-            ]
+        queue = get_queue()
+
+        def _enqueue_build_level(lv: str):
+            patch = {"1": "64", "2": "32", "4": "16"}.get(lv, "64")
+            job_kwargs = {
+                "input_dir": raw_dir,
+                "output_dir": f"data/wheat_risk/staged/L{lv}",
+                "patch_size": int(patch),
+                "step_size": int(patch),
+                "expected_weeks": 46,
+                "max_patches": int(max_patches),
+            }
+            job = queue.enqueue(
+                "modules.jobs.tasks.task_build_dataset",
+                args=(job_kwargs,),
+                job_timeout="1h",
+                result_ttl="7d",
+                description=f"build: build_L{lv}",
+            )
+            rec = JobRecord(
+                id=job.id,
+                section="build",
+                action=f"build_L{lv}" if action == "build_all" else action,
+                command=["task_build_dataset"],
+                status="enqueued",
+                enqueued_at=_now_iso(),
+            )
+            app.config["JOB_HISTORY"].insert(0, rec)
+            app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
 
         if action == "build_level":
-            _run_job("build", action, _cmd_for_level(stage))
+            _enqueue_build_level(stage)
             flash(f"Build L{stage} enqueued.", "success")
             return redirect(url_for("home"))
 
         if action == "build_all":
             for lv in ["1", "2", "4"]:
-                _run_job("build", f"build_L{lv}", _cmd_for_level(lv))
+                _enqueue_build_level(lv)
             flash("Build all enqueued.", "success")
             return redirect(url_for("home"))
 
@@ -285,57 +304,78 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         levels = request.form.get("levels", "1,2,4").strip()
         steps = request.form.get("steps", "100,500,2000").strip()
 
-        cmd = [
-            "uv",
-            "run",
-            "scripts/run_staged_training_matrix.py",
-            "--levels",
-            levels,
-            "--steps",
-            steps,
-            "--base-patch",
-            "64",
-        ]
-        if action == "dry_run":
-            cmd.append("--dry-run")
-        else:
-            cmd.extend(
-                [
-                    "--run",
-                    "--execute-train",
-                    "--index-csv-template",
-                    "./data/wheat_risk/staged/L{level}/index.csv",
-                    "--root-dir-template",
-                    "./data/wheat_risk/staged/L{level}",
-                    "--device",
-                    "cuda",
-                ]
-            )
+        queue = get_queue()
 
-        _run_job("train", action, cmd)
+        level_list = [x.strip() for x in levels.split(",") if x.strip()]
+        steps_list = [int(x.strip()) for x in steps.split(",") if x.strip()]
+
+        job_kwargs = {
+            "levels": level_list,
+            "steps": steps_list,
+            "base_patch": 64,
+            "dry_run": action == "dry_run",
+            "runs_dir": "runs",
+            "train_script": "scripts/train_staged_model.py",
+        }
+
+        if action != "dry_run":
+            job_kwargs["execute_train"] = True
+            job_kwargs["index_csv"] = "./data/wheat_risk/staged/L{level}/index.csv"
+            job_kwargs["root_dir"] = "./data/wheat_risk/staged/L{level}"
+            job_kwargs["device"] = "cuda"
+
+        job = queue.enqueue(
+            "modules.jobs.tasks.task_run_matrix",
+            args=(job_kwargs,),
+            job_timeout="1h",
+            result_ttl="7d",
+            description=f"train: {action}",
+        )
+        rec = JobRecord(
+            id=job.id,
+            section="train",
+            action=action,
+            command=["task_run_matrix"],
+            status="enqueued",
+            enqueued_at=_now_iso(),
+        )
+        app.config["JOB_HISTORY"].insert(0, rec)
+        app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
+
         flash(f"Training action '{action}' enqueued.", "success")
         return redirect(url_for("home"))
 
     @app.post("/run/eval")
     def run_eval() -> Response:
-        cmd = [
-            "uv",
-            "run",
-            "scripts/eval_staged_training_matrix.py",
-            "--summary-csv",
-            "runs/staged_final/summary.csv",
-            "--index-csv-template",
-            "./data/wheat_risk/staged/L{level}/index.csv",
-            "--root-dir-template",
-            "./data/wheat_risk/staged/L{level}",
-            "--output-csv",
-            "runs/staged_final/eval_metrics.csv",
-            "--best-json",
-            "runs/staged_final/best_model.json",
-            "--device",
-            "cuda",
-        ]
-        _run_job("eval", "eval_matrix", cmd)
+        queue = get_queue()
+
+        job_kwargs = {
+            "summary_csv": "runs/staged_final/summary.csv",
+            "index_csv_template": "./data/wheat_risk/staged/L{level}/index.csv",
+            "root_dir_template": "./data/wheat_risk/staged/L{level}",
+            "output_csv": "runs/staged_final/eval_metrics.csv",
+            "best_json": "runs/staged_final/best_model.json",
+            "device": "cuda",
+        }
+
+        job = queue.enqueue(
+            "modules.jobs.tasks.task_run_eval",
+            args=(job_kwargs,),
+            job_timeout="1h",
+            result_ttl="7d",
+            description=f"eval: eval_matrix",
+        )
+        rec = JobRecord(
+            id=job.id,
+            section="eval",
+            action="eval_matrix",
+            command=["task_run_eval"],
+            status="enqueued",
+            enqueued_at=_now_iso(),
+        )
+        app.config["JOB_HISTORY"].insert(0, rec)
+        app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
+
         flash("Evaluation enqueued.", "success")
         return redirect(url_for("home"))
 

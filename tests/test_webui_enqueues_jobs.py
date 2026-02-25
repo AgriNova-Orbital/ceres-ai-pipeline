@@ -18,3 +18,37 @@ def test_downloader_enqueues_job_instead_of_running(monkeypatch):
 
     client.post("/run/downloader", data={"action": "preview_export"})
     mock_queue.enqueue.assert_called_once()
+
+
+def test_webui_enqueues_service_tasks_instead_of_run_script(monkeypatch):
+    from unittest.mock import MagicMock
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue", lambda: mock_queue)
+
+    app = create_app()
+    client = app.test_client()
+
+    # Test inventory
+    client.post("/run/downloader", data={"action": "refresh_inventory"})
+    args, _ = mock_queue.enqueue.call_args
+    assert "modules.jobs.tasks.task_run_inventory" in str(args[0])
+    mock_queue.reset_mock()
+
+    # Test build
+    client.post("/run/build", data={"action": "build_level", "level": "1"})
+    args, _ = mock_queue.enqueue.call_args
+    assert "modules.jobs.tasks.task_build_dataset" in str(args[0])
+    mock_queue.reset_mock()
+
+    # Test train
+    client.post("/run/train", data={"action": "execute_train"})
+    args, _ = mock_queue.enqueue.call_args
+    assert "modules.jobs.tasks.task_run_matrix" in str(args[0])
+    mock_queue.reset_mock()
+
+    # Test eval
+    client.post("/run/eval")
+    args, _ = mock_queue.enqueue.call_args
+    assert "modules.jobs.tasks.task_run_eval" in str(args[0])
