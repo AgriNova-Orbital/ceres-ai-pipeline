@@ -4,7 +4,7 @@ from datetime import date
 
 
 def test_fill_missing_dates_weekly_grid() -> None:
-    from scripts.build_npz_dataset_from_geotiffs import fill_missing_dates
+    from modules.services.dataset_service import fill_missing_dates
 
     items = [
         (date(2025, 1, 1), "d1"),
@@ -18,7 +18,7 @@ def test_fill_missing_dates_weekly_grid() -> None:
 
 
 def test_parse_temporal_filename_extracts_explicit_date() -> None:
-    from scripts.build_npz_dataset_from_geotiffs import _parse_temporal_filename
+    from modules.services.dataset_service import _parse_temporal_filename
 
     parsed = _parse_temporal_filename("fr_wheat_feat_2025_data_20250312.tif")
     assert parsed is not None
@@ -30,7 +30,7 @@ def test_parse_temporal_filename_extracts_explicit_date() -> None:
 
 
 def test_parse_temporal_filename_supports_week_code() -> None:
-    from scripts.build_npz_dataset_from_geotiffs import _parse_temporal_filename
+    from modules.services.dataset_service import _parse_temporal_filename
 
     parsed = _parse_temporal_filename("fr_wheat_feat_2025W02.tif")
     assert parsed is not None

@@ -85,7 +85,7 @@ def test_build_script_parallel_workers_mode(tmp_path: Path) -> None:
 
 
 def test_build_patch_all_nan_risk_emits_no_runtime_warning(tmp_path: Path) -> None:
-    from scripts.build_npz_dataset_from_geotiffs import _build_patch_and_save
+    from modules.services.dataset_service import _build_patch_and_save
 
     raw = tmp_path / "raw"
     raw.mkdir(parents=True, exist_ok=True)

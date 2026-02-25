@@ -4,7 +4,7 @@ import numpy as np
 
 
 def test_fill_missing_weeks_old_to_new():
-    from scripts.build_npz_dataset_from_geotiffs import fill_missing_weeks
+    from modules.services.dataset_service import fill_missing_weeks
 
     # Oldest->newest should be 3,2,1 (since 1 is newest in reverse scheme)
     items = [
