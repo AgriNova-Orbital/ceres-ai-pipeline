@@ -11,7 +11,7 @@ def test_downloader_enqueues_job_instead_of_running(monkeypatch):
 
     # This is tricky, we need to patch the get_queue function
     # Let's define it inside the webui module first
-    monkeypatch.setattr("apps.wheat_risk_webui.get_queue", lambda: mock_queue)
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
 
     app = create_app()
     client = app.test_client()
@@ -25,7 +25,7 @@ def test_webui_enqueues_service_tasks_instead_of_run_script(monkeypatch):
     from apps.wheat_risk_webui import create_app
 
     mock_queue = MagicMock()
-    monkeypatch.setattr("apps.wheat_risk_webui.get_queue", lambda: mock_queue)
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
 
     app = create_app()
     client = app.test_client()
@@ -65,7 +65,7 @@ def test_job_status_endpoint_returns_json(monkeypatch):
     mock_job.func_name = "test_func"
     mock_queue.jobs = [mock_job]
 
-    monkeypatch.setattr("apps.wheat_risk_webui.get_queue", lambda: mock_queue)
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
 
     app = create_app()
     client = app.test_client()

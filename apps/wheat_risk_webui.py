@@ -32,9 +32,12 @@ class JobRecord:
     enqueued_at: str
 
 
-def get_queue() -> Queue:
-    # In a real app, this would be configured
-    return Queue(connection=Redis())
+def get_redis_conn() -> Redis:
+    return Redis(decode_responses=True)
+
+
+def get_queue_conn() -> Queue:
+    return Queue(connection=get_redis_conn())
 
 
 def _now_iso() -> str:
@@ -145,7 +148,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.get("/api/jobs")
     def jobs_json() -> Response:
         try:
-            queue = get_queue()
+            queue = get_queue_conn()
             jobs = queue.jobs
             rows = []
             for j in jobs:
@@ -165,6 +168,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.post("/run/downloader")
     def run_downloader() -> Response:
         action = request.form.get("action", "preview_export")
+        lock_key = f"lock:downloader:{action}"
+
+        try:
+            redis = get_redis_conn()
+            if redis.get(lock_key):
+                flash(f"Downloader action '{action}' is already running.", "error")
+                return redirect(url_for("home"))
+        except Exception:
+            pass  # Fail open if redis is unavailable
+
         stage = request.form.get("stage", "1").strip()
         start_date = request.form.get("start_date", "2025-01-01").strip()
         end_date = request.form.get("end_date", "2025-12-31").strip()
@@ -173,7 +186,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         drive_folder = request.form.get("drive_folder", "").strip()
         raw_dir = request.form.get("raw_dir", "data/raw/france_2025_weekly").strip()
 
-        queue = get_queue()
+        queue = get_queue_conn()
 
         if action in {"preview_export", "run_export"}:
             cmd = [
@@ -206,6 +219,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 kwargs={"cwd": str(app.config["REPO_ROOT"])},
                 description=f"downloader: {action}",
             )
+            try:
+                redis.set(lock_key, job.id, ex=3600)
+            except Exception:
+                pass
             rec = JobRecord(
                 id=job.id,
                 section="downloader",
@@ -231,6 +248,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 result_ttl="7d",
                 description=f"downloader: {action}",
             )
+            try:
+                redis.set(lock_key, job.id, ex=3600)
+            except Exception:
+                pass
             rec = JobRecord(
                 id=job.id,
                 section="downloader",
@@ -252,10 +273,26 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     def run_build() -> Response:
         action = request.form.get("action", "build_level").strip()
         stage = request.form.get("level", "1").strip()
+
+        lock_key = f"lock:build:{action}:{stage}"
+        if action == "build_all":
+            lock_key = "lock:build:build_all"
+
+        try:
+            redis = get_redis_conn()
+            if redis.get(lock_key):
+                flash(
+                    f"Build action '{action}' for level {stage} is already running.",
+                    "error",
+                )
+                return redirect(url_for("home"))
+        except Exception:
+            pass
+
         raw_dir = request.form.get("raw_dir", "data/raw/france_2025_weekly").strip()
         max_patches = request.form.get("max_patches", "12000").strip()
 
-        queue = get_queue()
+        queue = get_queue_conn()
 
         def _enqueue_build_level(lv: str):
             patch = {"1": "64", "2": "32", "4": "16"}.get(lv, "64")
@@ -274,6 +311,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 result_ttl="7d",
                 description=f"build: build_L{lv}",
             )
+            try:
+                redis.set(lock_key, job.id, ex=3600)
+            except Exception:
+                pass
             rec = JobRecord(
                 id=job.id,
                 section="build",
@@ -302,10 +343,20 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.post("/run/train")
     def run_train_matrix() -> Response:
         action = request.form.get("action", "dry_run").strip()
+        lock_key = f"lock:train:{action}"
+
+        try:
+            redis = get_redis_conn()
+            if redis.get(lock_key):
+                flash(f"Training action '{action}' is already running.", "error")
+                return redirect(url_for("home"))
+        except Exception:
+            pass
+
         levels = request.form.get("levels", "1,2,4").strip()
         steps = request.form.get("steps", "100,500,2000").strip()
 
-        queue = get_queue()
+        queue = get_queue_conn()
 
         level_list = [x.strip() for x in levels.split(",") if x.strip()]
         steps_list = [int(x.strip()) for x in steps.split(",") if x.strip()]
@@ -332,6 +383,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             result_ttl="7d",
             description=f"train: {action}",
         )
+        try:
+            redis.set(lock_key, job.id, ex=3600)
+        except Exception:
+            pass
         rec = JobRecord(
             id=job.id,
             section="train",
@@ -348,7 +403,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.post("/run/eval")
     def run_eval() -> Response:
-        queue = get_queue()
+        lock_key = "lock:eval:eval_matrix"
+        try:
+            redis = get_redis_conn()
+            if redis.get(lock_key):
+                flash("Evaluation is already running.", "error")
+                return redirect(url_for("home"))
+        except Exception:
+            pass
+
+        queue = get_queue_conn()
 
         job_kwargs = {
             "summary_csv": "runs/staged_final/summary.csv",
@@ -366,6 +430,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             result_ttl="7d",
             description=f"eval: eval_matrix",
         )
+        try:
+            redis.set(lock_key, job.id, ex=3600)
+        except Exception:
+            pass
         rec = JobRecord(
             id=job.id,
             section="eval",
