@@ -1,6 +1,6 @@
-# Wheat Risk MVP Pipeline
+# Ceres AI Pipeline
 
-**A Machine Learning Pipeline for Wheat Rust Risk Prediction**
+**A machine learning pipeline for wheat rust risk prediction by AgriNova-Orbital**
 
 This project demonstrates a Python-based pipeline for predicting wheat rust risk using Sentinel-2 time-series data and a CNN-LSTM model.
 
@@ -24,8 +24,8 @@ This project demonstrates a Python-based pipeline for predicting wheat rust risk
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ben001109/ActInSpace-Orbital-Strategists.git
-cd ActInSpace-Orbital-Strategists
+git clone https://github.com/AgriNova-Orbital/ceres-ai-pipeline.git
+cd ceres-ai-pipeline
 ```
 
 2. Sync dependencies:
@@ -54,6 +54,10 @@ Prototype includes:
 - Dataset build controls (single level / all levels)
 - Training matrix dry-run and execute actions
 - Evaluation trigger and run history panel
+
+For a full step-by-step manual, see:
+
+- `docs/USER_GUIDE.md`
 
 ## 🛠️ Operational CLI Usage
 

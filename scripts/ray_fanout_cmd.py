@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Optional repo directory for Windows nodes. Supports env vars like %USERPROFILE%. "
-            "Example: %USERPROFILE%\\Desktop\\ActInSpace-Orbital-Strategists"
+            "Example: %USERPROFILE%\\Desktop\\ceres-ai-pipeline"
         ),
     )
     p.add_argument(
