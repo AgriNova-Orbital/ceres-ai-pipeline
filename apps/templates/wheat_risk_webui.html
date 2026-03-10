@@ -29,6 +29,7 @@
   {% endif %}
   {% endwith %}
 
+  {% if is_authenticated %}
   <nav>
     <a href="#downloader">Data Downloader</a>
     <a href="#acquisition">Data Acquisition</a>
@@ -37,8 +38,16 @@
     <a href="#evaluation">Evaluation</a>
     <a href="#runs">Run History</a>
   </nav>
+  {% endif %}
 
   <main>
+    {% if not is_authenticated %}
+    <section class="card">
+      <h2>Welcome</h2>
+      <p>Sign in with Google to use the Wheat Risk pipeline, export data, and run background jobs.</p>
+      <p><a href="{{ url_for('login') }}">Login with Google</a></p>
+    </section>
+    {% else %}
     <section id="downloader" class="card">
       <h2>Data Downloader</h2>
       <form method="post" action="{{ url_for('run_downloader') }}" class="grid">
@@ -55,7 +64,14 @@
         <label>Limit <input name="limit" value="4"></label>
         <label>EE Project <input name="ee_project" placeholder="my-gee-project"></label>
         <label>Drive Folder <input name="drive_folder" value="EarthEngine"></label>
-        <label class="span2">Raw Dir <input name="raw_dir" value="data/raw/france_2025_weekly"></label>
+        <label class="span2">Raw Dir
+          <select name="raw_dir">
+            {% for d in raw_dirs %}
+            <option value="{{ d }}" {{ 'selected' if d == default_raw_dir else '' }}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="span2">Custom Raw Dir <input name="raw_dir_custom" placeholder="/abs/path/or/relative/raw_dir"></label>
         <button type="submit" class="span2">Run Downloader Action</button>
       </form>
     </section>
@@ -66,7 +82,14 @@
         <div>
           <h3>Raw GeoTIFF Quicklook</h3>
           <form id="raw-preview-form" class="grid compact" onsubmit="return setRawPreview()">
-            <label class="span2">File Path <input id="raw_path" placeholder="/abs/path/to/file.tif"></label>
+            <label class="span2">Scanned Raw File
+              <select id="raw_path_select">
+                {% for p in raw_tif_paths %}
+                <option value="{{ p }}" {{ 'selected' if p == default_raw_tif else '' }}>{{ p }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="span2">Custom Raw File <input id="raw_path_custom" placeholder="/abs/path/to/file.tif"></label>
             <label>Bands <input id="raw_bands" value="1,2,3"></label>
             <label>Max Size <input id="raw_size" value="512"></label>
             <button type="submit" class="span2">Preview Raw</button>
@@ -76,7 +99,14 @@
         <div>
           <h3>Patch NPZ Quicklook</h3>
           <form id="patch-preview-form" class="grid compact" onsubmit="return setPatchPreview()">
-            <label class="span2">File Path <input id="patch_path" placeholder="/abs/path/to/sample.npz"></label>
+            <label class="span2">Scanned Patch File
+              <select id="patch_path_select">
+                {% for p in patch_npz_paths %}
+                <option value="{{ p }}" {{ 'selected' if p == default_patch_npz else '' }}>{{ p }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="span2">Custom Patch File <input id="patch_path_custom" placeholder="/abs/path/to/sample.npz"></label>
             <label>t index <input id="patch_t" value="0"></label>
             <label>channels <input id="patch_channels" value="0,1,2"></label>
             <button type="submit" class="span2">Preview Patch</button>
@@ -96,7 +126,14 @@
           </select>
         </label>
         <label>Level <input name="level" value="1"></label>
-        <label class="span2">Raw Dir <input name="raw_dir" value="data/raw/france_2025_weekly"></label>
+        <label class="span2">Raw Dir
+          <select name="raw_dir">
+            {% for d in raw_dirs %}
+            <option value="{{ d }}" {{ 'selected' if d == default_raw_dir else '' }}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="span2">Custom Raw Dir <input name="raw_dir_custom" placeholder="/abs/path/or/relative/raw_dir"></label>
         <label>Max Patches <input name="max_patches" value="12000"></label>
         <button type="submit">Run Build</button>
       </form>
@@ -122,6 +159,10 @@
       <form method="post" action="{{ url_for('run_eval') }}">
         <button type="submit">Run Evaluation</button>
       </form>
+      <div class="evaluation-plot">
+        <h3>Evaluation F2 Scores</h3>
+        <img src="{{ url_for('evaluation_plot') }}" alt="Evaluation metrics plot">
+      </div>
     </section>
 
     <section id="runs" class="card">
@@ -144,11 +185,15 @@
         </tbody>
       </table>
     </section>
+    {% endif %}
   </main>
 
   <script>
+    {% if is_authenticated %}
     function setRawPreview() {
-      const path = document.getElementById('raw_path').value;
+      const customPath = document.getElementById('raw_path_custom').value.trim();
+      const selectedPath = document.getElementById('raw_path_select').value;
+      const path = customPath || selectedPath;
       const bands = document.getElementById('raw_bands').value;
       const size = document.getElementById('raw_size').value;
       const img = document.getElementById('raw_preview_img');
@@ -156,7 +201,9 @@
       return false;
     }
     function setPatchPreview() {
-      const path = document.getElementById('patch_path').value;
+      const customPath = document.getElementById('patch_path_custom').value.trim();
+      const selectedPath = document.getElementById('patch_path_select').value;
+      const path = customPath || selectedPath;
       const t = document.getElementById('patch_t').value;
       const channels = document.getElementById('patch_channels').value;
       const img = document.getElementById('patch_preview_img');
@@ -200,6 +247,7 @@
     // Initial fetch and set interval
     fetchJobs();
     setInterval(fetchJobs, 5000);
+    {% endif %}
   </script>
 </body>
 </html>

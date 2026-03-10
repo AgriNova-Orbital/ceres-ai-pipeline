@@ -17,7 +17,7 @@ def _ee() -> Any:
     return require_ee("Earth Engine API helpers")
 
 
-def initialize_ee(project_id: Optional[str] = None):
+def initialize_ee(project_id: Optional[str] = None, credentials: Any | None = None):
     """
     Initialize Earth Engine with authentication.
 
@@ -29,8 +29,12 @@ def initialize_ee(project_id: Optional[str] = None):
     """
     try:
         ee = _ee()
-        if project_id:
+        if project_id and credentials is not None:
+            ee.Initialize(project=project_id, credentials=credentials)
+        elif project_id:
             ee.Initialize(project=project_id)
+        elif credentials is not None:
+            ee.Initialize(credentials=credentials)
         else:
             ee.Initialize()
         print("✓ Earth Engine initialized successfully")

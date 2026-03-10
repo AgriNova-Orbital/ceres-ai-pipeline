@@ -157,6 +157,8 @@ runs/
 reports/
 backups/
 session-*.md
+client_secret_*.json
+oauth_token*.json
 
 # Rope project settings
 .ropeproject

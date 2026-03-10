@@ -3,6 +3,12 @@ from unittest.mock import MagicMock
 import pytest
 
 
+def _login(client) -> None:
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+
 def test_downloader_enqueues_job_instead_of_running(monkeypatch):
     mock_queue = MagicMock()
     # We need to create a fixture or a way to get the app object
@@ -15,6 +21,7 @@ def test_downloader_enqueues_job_instead_of_running(monkeypatch):
 
     app = create_app()
     client = app.test_client()
+    _login(client)
 
     client.post("/run/downloader", data={"action": "preview_export"})
     mock_queue.enqueue.assert_called_once()
@@ -29,6 +36,7 @@ def test_webui_enqueues_service_tasks_instead_of_run_script(monkeypatch):
 
     app = create_app()
     client = app.test_client()
+    _login(client)
 
     # Test inventory
     client.post("/run/downloader", data={"action": "refresh_inventory"})
@@ -69,8 +77,117 @@ def test_job_status_endpoint_returns_json(monkeypatch):
 
     app = create_app()
     client = app.test_client()
+    _login(client)
     resp = client.get("/api/jobs")
     assert resp.status_code == 200
     assert isinstance(resp.json, list)
     if len(resp.json) > 0:
         assert "status" in resp.json[0]
+
+
+def test_job_status_endpoint_handles_real_enqueued_job_with_fakeredis(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("USE_FAKEREDIS", "1")
+
+    from apps.wheat_risk_webui import create_app, get_queue_conn
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+    q = get_queue_conn()
+    q.enqueue(
+        "modules.jobs.tasks.task_run_inventory",
+        {"input_dir": str(tmp_path), "output_dir": str(tmp_path)},
+    )
+
+    resp = client.get("/api/jobs")
+    assert resp.status_code == 200
+    assert isinstance(resp.json, list)
+    assert not resp.json[0].get("error")
+
+
+def test_downloader_enqueue_includes_user_oauth_token(monkeypatch):
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-1"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app()
+    client = app.test_client()
+
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+    client.post("/run/downloader", data={"action": "refresh_inventory"})
+    _, kwargs = mock_queue.enqueue.call_args
+    job_kwargs = kwargs["args"][0]
+    assert job_kwargs["oauth_token"]["access_token"] == "abc"
+    assert job_kwargs["oauth_token"]["refresh_token"] == "def"
+
+
+def test_downloader_custom_raw_dir_overrides_scanned_selection(monkeypatch):
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-1"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app()
+    client = app.test_client()
+
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+    client.post(
+        "/run/downloader",
+        data={
+            "action": "refresh_inventory",
+            "raw_dir": "data/raw/france_2025_weekly",
+            "raw_dir_custom": "/tmp/custom_raw_dir",
+        },
+    )
+    _, kwargs = mock_queue.enqueue.call_args
+    job_kwargs = kwargs["args"][0]
+    assert job_kwargs["input_dir"] == "/tmp/custom_raw_dir"
+
+
+def test_downloader_preview_export_passes_oauth_env_to_run_script(monkeypatch):
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-1"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+    client.post(
+        "/run/downloader",
+        data={
+            "action": "preview_export",
+            "stage": "1",
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-31",
+            "limit": "4",
+        },
+    )
+    _, kwargs = mock_queue.enqueue.call_args
+    env_overrides = kwargs["kwargs"]["env_overrides"]
+    assert "GOOGLE_OAUTH_TOKEN_JSON" in env_overrides

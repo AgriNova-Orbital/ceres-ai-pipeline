@@ -9,6 +9,10 @@ from typing import Sequence
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from modules.ee_import import require_ee
+from modules.google_user_oauth import (
+    get_google_web_client_config,
+    load_google_credentials_from_env,
+)
 from modules.wheat_risk.config import PipelineConfig, StagePreset
 from modules.wheat_risk.labels import risk_weekly
 from modules.wheat_risk.masks import (
@@ -126,6 +130,30 @@ def _export_name_for_bin(bin_start: str) -> str:
     return f"fr_wheat_risk_{y}W{w:02d}"
 
 
+def _initialize_ee_for_export(ee: object, *, ee_project: str | None) -> str | None:
+    creds = load_google_credentials_from_env()
+    resolved_project = ee_project
+    if resolved_project is None:
+        try:
+            _, _, project_id = get_google_web_client_config()
+            if project_id:
+                resolved_project = project_id
+        except Exception:
+            resolved_project = ee_project
+
+    if creds is not None and resolved_project:
+        ee.Initialize(project=resolved_project, credentials=creds)
+        return resolved_project
+    if creds is not None:
+        ee.Initialize(credentials=creds)
+        return resolved_project
+    if resolved_project:
+        ee.Initialize(project=resolved_project)
+        return resolved_project
+    ee.Initialize()
+    return resolved_project
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -173,7 +201,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    if not args.ee_project:
+    oauth_creds_present = bool(os.environ.get("GOOGLE_OAUTH_TOKEN_JSON"))
+    if not args.ee_project and not oauth_creds_present:
         print(
             "Hint: pass --ee-project <GCP_PROJECT_ID> (or set EE_PROJECT env var), then re-run."
         )
@@ -181,7 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ee = require_ee("weekly risk raster export")
     try:
-        ee.Initialize(project=args.ee_project)
+        _initialize_ee_for_export(ee, ee_project=args.ee_project)
     except Exception as e:
         msg = str(e)
         print(msg)

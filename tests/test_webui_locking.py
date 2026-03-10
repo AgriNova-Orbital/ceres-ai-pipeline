@@ -5,6 +5,12 @@ from unittest.mock import MagicMock
 from pathlib import Path
 
 
+def _login(client) -> None:
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+
 def test_job_locking_prevents_duplicate_tasks(monkeypatch, tmp_path: Path):
     from apps.wheat_risk_webui import create_app
 
@@ -37,6 +43,7 @@ def test_job_locking_prevents_duplicate_tasks(monkeypatch, tmp_path: Path):
     # Ensure TESTING is true so flash messages are recorded without requiring a full session environment in pytest
     app.config["TESTING"] = True
     client = app.test_client()
+    _login(client)
 
     # First call: Should succeed and set the lock
     fake_redis_store.clear()

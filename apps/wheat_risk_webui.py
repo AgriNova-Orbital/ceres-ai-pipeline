@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import io
+import json
+import os
 from redis import Redis
 from rq import Queue
+from authlib.integrations.flask_client import OAuth
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,8 +21,19 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
+
+from modules.google_user_oauth import (
+    DEFAULT_SCOPES,
+    discover_google_oauth_client_secret_file,
+    get_google_oauth_redirect_uri,
+    get_google_web_client_config,
+)
+
+
+_FAKE_REDIS_SERVER = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,12 +46,33 @@ class JobRecord:
     enqueued_at: str
 
 
+def _make_redis_conn(*, decode_responses: bool) -> Redis:
+    if os.environ.get("USE_FAKEREDIS") == "1":
+        try:
+            from fakeredis import FakeServer, FakeStrictRedis
+
+            global _FAKE_REDIS_SERVER
+            if _FAKE_REDIS_SERVER is None:
+                _FAKE_REDIS_SERVER = FakeServer()
+            return FakeStrictRedis(
+                server=_FAKE_REDIS_SERVER,
+                decode_responses=decode_responses,
+            )
+        except ImportError:
+            pass
+    return Redis(decode_responses=decode_responses)
+
+
 def get_redis_conn() -> Redis:
-    return Redis(decode_responses=True)
+    return _make_redis_conn(decode_responses=True)
+
+
+def get_queue_redis_conn() -> Redis:
+    return _make_redis_conn(decode_responses=False)
 
 
 def get_queue_conn() -> Queue:
-    return Queue(connection=get_redis_conn())
+    return Queue(connection=get_queue_redis_conn())
 
 
 def _now_iso() -> str:
@@ -133,16 +168,142 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
 
+    if not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
+        discovered_secret = discover_google_oauth_client_secret_file([root])
+        if discovered_secret is not None:
+            os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(discovered_secret)
+
+    try:
+        client_id, client_secret, project_id = get_google_web_client_config()
+    except Exception:
+        client_id, client_secret, project_id = "dummy_id", "dummy_secret", None
+
+    if project_id and not os.environ.get("GOOGLE_PROJECT_ID"):
+        os.environ["GOOGLE_PROJECT_ID"] = project_id
+
+    oauth = OAuth(app)
+    oauth.register(
+        name="google",
+        client_id=client_id,
+        client_secret=client_secret,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": " ".join(DEFAULT_SCOPES)},
+    )
+
+    @app.route("/login")
+    def login() -> Response:
+        redirect_uri = get_google_oauth_redirect_uri() or url_for(
+            "auth", _external=True
+        )
+        return oauth.google.authorize_redirect(redirect_uri)
+
+    @app.route("/auth/callback")
+    def auth() -> Response:
+        token = oauth.google.authorize_access_token()
+        session["google_token"] = token
+        user = token.get("userinfo") or {}
+        session["user"] = user
+        return redirect(url_for("home"))
+
+    @app.route("/logout")
+    def logout() -> Response:
+        session.pop("user", None)
+        session.pop("google_token", None)
+        return redirect(url_for("login"))
+
+    @app.before_request
+    def require_login() -> Response | None:
+        allowed_endpoints = {
+            "home",
+            "login",
+            "auth",
+            "logout",
+            "static",
+        }
+        if request.endpoint in allowed_endpoints:
+            return None
+        if request.endpoint is None:
+            return None
+        if "user" not in session:
+            return redirect(url_for("login"))
+        return None
+
+    def get_raw_data_dirs() -> list[str]:
+        raw_base = Path(app.config["REPO_ROOT"]) / "data" / "raw"
+        if not raw_base.exists() or not raw_base.is_dir():
+            return ["data/raw (Not Found)"]
+
+        dirs = []
+        for p in sorted(raw_base.iterdir()):
+            if p.is_dir() and any(p.glob("*.tif*")):
+                # Return path relative to REPO_ROOT for simplicity in forms
+                dirs.append(f"data/raw/{p.name}")
+
+        if not dirs:
+            return ["data/raw (Empty)"]
+        return dirs
+
+    def get_scanned_raw_tif_paths(limit: int = 100) -> list[str]:
+        raw_base = Path(app.config["REPO_ROOT"]) / "data" / "raw"
+        if not raw_base.exists() or not raw_base.is_dir():
+            return []
+
+        files: list[str] = []
+        for p in sorted(raw_base.rglob("*.tif*")):
+            if p.is_file():
+                files.append(str(p.relative_to(app.config["REPO_ROOT"])))
+            if len(files) >= limit:
+                break
+        return files
+
+    def get_scanned_patch_npz_paths(limit: int = 100) -> list[str]:
+        candidates = [
+            Path(app.config["REPO_ROOT"]) / "data" / "wheat_risk",
+            Path(app.config["REPO_ROOT"]) / "runs",
+        ]
+        files: list[str] = []
+        for base in candidates:
+            if not base.exists() or not base.is_dir():
+                continue
+            for p in sorted(base.rglob("*.npz")):
+                if p.is_file():
+                    files.append(str(p.relative_to(app.config["REPO_ROOT"])))
+                if len(files) >= limit:
+                    return files
+        return files
+
+    def resolve_path_input(selected_value: str | None, custom_value: str | None) -> str:
+        custom = (custom_value or "").strip()
+        if custom:
+            return custom
+        return (selected_value or "").strip()
+
     @app.get("/")
     def home() -> str:
         mode = request.args.get("mode", "basic").strip().lower()
         if mode not in {"basic", "advanced"}:
             mode = "basic"
+
+        is_authenticated = "user" in session
+        raw_dirs = get_raw_data_dirs()
+        default_raw_dir = raw_dirs[0]
+        raw_tif_paths = get_scanned_raw_tif_paths()
+        patch_npz_paths = get_scanned_patch_npz_paths()
+        default_raw_tif = raw_tif_paths[0] if raw_tif_paths else ""
+        default_patch_npz = patch_npz_paths[0] if patch_npz_paths else ""
+
         return render_template(
             "wheat_risk_webui.html",
+            is_authenticated=is_authenticated,
             mode=mode,
             jobs=app.config["JOB_HISTORY"],
             repo_root=str(app.config["REPO_ROOT"]),
+            raw_dirs=raw_dirs,
+            default_raw_dir=default_raw_dir,
+            raw_tif_paths=raw_tif_paths,
+            default_raw_tif=default_raw_tif,
+            patch_npz_paths=patch_npz_paths,
+            default_patch_npz=default_patch_npz,
         )
 
     @app.get("/api/jobs")
@@ -154,7 +315,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             for j in jobs:
                 rows.append(
                     {
-                        "id": j.get_id(),
+                        "id": str(getattr(j, "id", "")),
                         "action": j.func_name,
                         "status": j.get_status() or "unknown",
                         "started_at": str(j.started_at) if j.started_at else "",
@@ -184,7 +345,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         limit = request.form.get("limit", "4").strip()
         ee_project = request.form.get("ee_project", "").strip()
         drive_folder = request.form.get("drive_folder", "").strip()
-        raw_dir = request.form.get("raw_dir", "data/raw/france_2025_weekly").strip()
+        raw_dir = resolve_path_input(
+            request.form.get("raw_dir", "data/raw/france_2025_weekly"),
+            request.form.get("raw_dir_custom"),
+        )
 
         queue = get_queue_conn()
 
@@ -216,7 +380,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 args=(cmd,),
                 job_timeout="1h",
                 result_ttl="7d",
-                kwargs={"cwd": str(app.config["REPO_ROOT"])},
+                kwargs={
+                    "cwd": str(app.config["REPO_ROOT"]),
+                    "env_overrides": {
+                        "GOOGLE_OAUTH_TOKEN_JSON": json.dumps(
+                            session.get("google_token")
+                        )
+                    }
+                    if session.get("google_token")
+                    else {},
+                },
                 description=f"downloader: {action}",
             )
             try:
@@ -240,6 +413,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 "output_dir": "reports",
                 "start_date": start_date,
                 "cadence_days": 7,
+                "oauth_token": session.get("google_token"),
             }
             job = queue.enqueue(
                 "modules.jobs.tasks.task_run_inventory",
@@ -289,7 +463,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         except Exception:
             pass
 
-        raw_dir = request.form.get("raw_dir", "data/raw/france_2025_weekly").strip()
+        raw_dir = resolve_path_input(
+            request.form.get("raw_dir", "data/raw/france_2025_weekly"),
+            request.form.get("raw_dir_custom"),
+        )
         max_patches = request.form.get("max_patches", "12000").strip()
 
         queue = get_queue_conn()
@@ -303,6 +480,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 "step_size": int(patch),
                 "expected_weeks": 46,
                 "max_patches": int(max_patches),
+                "oauth_token": session.get("google_token"),
             }
             job = queue.enqueue(
                 "modules.jobs.tasks.task_build_dataset",
@@ -368,6 +546,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "dry_run": action == "dry_run",
             "runs_dir": "runs",
             "train_script": "scripts/train_staged_model.py",
+            "oauth_token": session.get("google_token"),
         }
 
         if action != "dry_run":
@@ -421,6 +600,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "output_csv": "runs/staged_final/eval_metrics.csv",
             "best_json": "runs/staged_final/best_model.json",
             "device": "cuda",
+            "oauth_token": session.get("google_token"),
         }
 
         job = queue.enqueue(
@@ -447,6 +627,24 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
         flash("Evaluation enqueued.", "success")
         return redirect(url_for("home"))
+
+    @app.get("/plots/evaluation.png")
+    def evaluation_plot() -> Response:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        from matplotlib.figure import Figure
+
+        fig = Figure(figsize=(6, 3))
+        ax = fig.subplots()
+        ax.set_title("Evaluation Metrics Preview")
+        ax.set_xlabel("No data loaded")
+        ax.set_yticks([])
+        ax.set_xticks([])
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        return Response(buf.getvalue(), mimetype="image/png")
 
     @app.get("/api/preview/raw")
     def preview_raw() -> Response:

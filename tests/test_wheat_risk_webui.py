@@ -7,6 +7,12 @@ import numpy as np
 import pytest
 
 
+def _login(client) -> None:
+    with client.session_transaction() as sess:
+        sess["user"] = {"email": "user@example.com"}
+        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+
+
 def _mk_fake_tif(path: Path) -> None:
     rasterio = pytest.importorskip("rasterio")
     from rasterio.transform import from_origin
@@ -40,12 +46,71 @@ def test_webui_home_renders_tabs(tmp_path: Path) -> None:
 
     app = create_app(repo_root=tmp_path)
     client = app.test_client()
+    _login(client)
     resp = client.get("/")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "Wheat Risk WebUI" in body
     assert "Data Downloader" in body
     assert "Training Matrix" in body
+
+
+def test_webui_raw_dir_dropdown_auto_scans_data_directories(tmp_path: Path) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    raw_base = tmp_path / "data" / "raw"
+    fr_dir = raw_base / "france_2025_weekly"
+    de_dir = raw_base / "germany_2025_weekly"
+    empty_dir = raw_base / "empty_dir"
+    fr_dir.mkdir(parents=True)
+    de_dir.mkdir(parents=True)
+    empty_dir.mkdir(parents=True)
+
+    _mk_fake_tif(fr_dir / "week_001.tif")
+    _mk_fake_tif(de_dir / "week_001.tif")
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+    _login(client)
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert '<select name="raw_dir">' in body
+    assert 'value="data/raw/france_2025_weekly"' in body
+    assert 'value="data/raw/germany_2025_weekly"' in body
+    assert "empty_dir" not in body
+
+
+def test_webui_path_fields_support_scanned_choices_and_custom_input(
+    tmp_path: Path,
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    raw_base = tmp_path / "data" / "raw" / "france_2025_weekly"
+    raw_base.mkdir(parents=True)
+    tif = raw_base / "week_001.tif"
+    _mk_fake_tif(tif)
+
+    patch_base = tmp_path / "data" / "wheat_risk" / "staged" / "L1" / "examples"
+    patch_base.mkdir(parents=True)
+    npz = patch_base / "sample_001.npz"
+    _mk_fake_npz(npz)
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+    _login(client)
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'id="raw_path_select"' in body
+    assert 'id="raw_path_custom"' in body
+    assert 'id="patch_path_select"' in body
+    assert 'id="patch_path_custom"' in body
+    assert 'value="data/raw/france_2025_weekly/week_001.tif"' in body
+    assert 'value="data/wheat_risk/staged/L1/examples/sample_001.npz"' in body
+    assert 'name="raw_dir_custom"' in body
 
 
 def test_raw_preview_endpoint_returns_png(tmp_path: Path) -> None:
@@ -56,6 +121,7 @@ def test_raw_preview_endpoint_returns_png(tmp_path: Path) -> None:
 
     app = create_app(repo_root=tmp_path)
     client = app.test_client()
+    _login(client)
     resp = client.get(f"/api/preview/raw?path={tif}")
     assert resp.status_code == 200
     assert resp.mimetype == "image/png"
@@ -70,6 +136,7 @@ def test_patch_preview_endpoint_returns_png(tmp_path: Path) -> None:
 
     app = create_app(repo_root=tmp_path)
     client = app.test_client()
+    _login(client)
     resp = client.get(f"/api/preview/patch?path={npz}&t=1")
     assert resp.status_code == 200
     assert resp.mimetype == "image/png"
@@ -89,6 +156,7 @@ def test_downloader_preview_runs_dry_run_command(
 
     app = create_app(repo_root=tmp_path)
     client = app.test_client()
+    _login(client)
     resp = client.post(
         "/run/downloader",
         data={
