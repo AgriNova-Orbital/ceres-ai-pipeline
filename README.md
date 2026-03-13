@@ -59,6 +59,11 @@ For a full step-by-step manual, see:
 
 - `docs/USER_GUIDE.md`
 
+Deployment and operations references:
+
+- `docs/DEPLOYMENT_CHECKLIST.md`
+- `docs/RISK_REVIEW.md`
+
 ## 🛠️ Operational CLI Usage
 
 For detailed documentation on the pipeline scripts (dataset creation, training, etc.), see [docs/WHEAT_RISK_PIPELINE.md](docs/WHEAT_RISK_PIPELINE.md).
