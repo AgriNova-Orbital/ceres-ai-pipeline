@@ -35,6 +35,8 @@ uv sync --dev --extra ml --extra distributed
 
 ### Launch the WebUI
 
+#### Local process mode
+
 Launch the main application, which runs both the WebUI and the background job runner.
 
 **Note:** This requires a Redis server to be running for task queue management.
@@ -47,6 +49,30 @@ Then open:
 ```text
 http://127.0.0.1:5055
 ```
+
+#### Container mode (recommended next deployment target)
+
+The current deployment branch introduces a split stack:
+- `web`
+- `worker`
+- `redis`
+
+With persistent SQLite state mounted at `/app/state/app.db`.
+
+Start it with:
+
+```bash
+docker compose up --build
+```
+
+The `worker` service is the only container that should receive GPU access.
+
+On first launch, the app should enter **Initialization** before login:
+- set OAuth client secret path
+- set redirect base URL
+- save settings into SQLite
+
+After initialization, users can sign in with Google.
 
 Prototype includes:
 - Data Downloader actions (preview export / run export / refresh inventory)

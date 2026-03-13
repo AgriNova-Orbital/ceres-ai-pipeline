@@ -25,10 +25,13 @@
   <main>
     <section class="card">
       <h2>Initialization</h2>
-      <p>Before using Google OAuth, configure the deployment-local OAuth client secret path and redirect base URL.</p>
-      <form method="post" action="{{ url_for('setup') }}" class="grid">
+      <p>Before using Google OAuth, configure the deployment-local OAuth client secret and redirect base URL.</p>
+      <form method="post" action="{{ url_for('setup') }}" class="grid" enctype="multipart/form-data">
         <label class="span2">OAuth client secret path
           <input name="oauth_client_secret_path" placeholder="/app/state/client_secret_xxx.json">
+        </label>
+        <label class="span2">Upload OAuth client secret JSON
+          <input type="file" name="oauth_client_secret_upload" accept=".json,application/json">
         </label>
         <label class="span2">Redirect base URL
           <input name="redirect_base_url" placeholder="http://127.0.0.1:5055">

@@ -229,9 +229,19 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     def setup() -> Response | str:
         if request.method == "POST":
             secret_path = request.form.get("oauth_client_secret_path", "").strip()
+            uploaded_secret = request.files.get("oauth_client_secret_upload")
             redirect_base = (
                 request.form.get("redirect_base_url", "").strip().rstrip("/")
             )
+            if uploaded_secret and uploaded_secret.filename:
+                state_dir = app.config["APP_DB_PATH"].parent
+                state_dir.mkdir(parents=True, exist_ok=True)
+                uploaded_name = (
+                    Path(uploaded_secret.filename).name or "client_secret.json"
+                )
+                secret_path = str(state_dir / uploaded_name)
+                uploaded_secret.save(secret_path)
+
             if not secret_path or not Path(secret_path).exists():
                 flash("OAuth client secret path is missing or invalid.", "error")
                 return render_template("setup.html")
