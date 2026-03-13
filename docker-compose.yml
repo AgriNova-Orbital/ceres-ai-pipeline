@@ -1,24 +1,51 @@
 version: '3.8'
 
 services:
-  earth-engine:
+  redis:
+    image: redis:7-alpine
+    container_name: ceres-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  web:
     build: .
-    image: earth-engine-app:latest
-    container_name: earth-engine-app
-    env_file:
-      - .env  # Loaded from host, not copied into image (see .dockerignore)
-    volumes:
-      # Mount data directory for exports
-      - ./data:/app/data
-      # Mount logs directory
-      - ./logs:/app/logs
+    container_name: ceres-web
+    command: ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "apps.wheat_risk_webui:create_app()"]
+    depends_on:
+      - redis
     environment:
-      # Override specific environment variables if needed
-      - PYTHONUNBUFFERED=1
-    # For batch processing that exits after completion
-    restart: "no"
-    # Use 'restart: on-failure' if you want to retry on errors
-    # Use 'restart: unless-stopped' only for long-running services
-    # Uncomment to expose Flask port if running a web service
-    # ports:
-    #   - "5000:5000"
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/app/state/client_secret.json
+    ports:
+      - "5055:5055"
+    volumes:
+      - app_state:/app/state
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: ceres-worker
+    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    depends_on:
+      - redis
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/app/state/client_secret.json
+    volumes:
+      - app_state:/app/state
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  app_state:

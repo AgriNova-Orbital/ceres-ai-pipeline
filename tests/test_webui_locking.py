@@ -5,6 +5,20 @@ from unittest.mock import MagicMock
 from pathlib import Path
 
 
+def _initialize_app(app, tmp_path: Path) -> None:
+    secret = tmp_path / "client_secret.json"
+    secret.write_text(
+        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/auth/callback"]}}',
+        encoding="utf-8",
+    )
+    app.config["SQLITE_STORE"].save_settings(
+        initialized=True,
+        oauth_client_secret_path=str(secret),
+        redirect_base_url="http://127.0.0.1:5055",
+    )
+    app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
+
+
 def _login(client) -> None:
     with client.session_transaction() as sess:
         sess["user"] = {"email": "user@example.com"}
@@ -42,6 +56,7 @@ def test_job_locking_prevents_duplicate_tasks(monkeypatch, tmp_path: Path):
     app = create_app(repo_root=tmp_path)
     # Ensure TESTING is true so flash messages are recorded without requiring a full session environment in pytest
     app.config["TESTING"] = True
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
 

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ceres AI Pipeline Initialization</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='wheat_risk_webui.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Ceres AI Pipeline</h1>
+    <p class="sub">Initialization</p>
+  </header>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+  {% if msgs %}
+  <section class="flash-list">
+    {% for cat, msg in msgs %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% endwith %}
+
+  <main>
+    <section class="card">
+      <h2>Initialization</h2>
+      <p>Before using Google OAuth, configure the deployment-local OAuth client secret path and redirect base URL.</p>
+      <form method="post" action="{{ url_for('setup') }}" class="grid">
+        <label class="span2">OAuth client secret path
+          <input name="oauth_client_secret_path" placeholder="/app/state/client_secret_xxx.json">
+        </label>
+        <label class="span2">Redirect base URL
+          <input name="redirect_base_url" placeholder="http://127.0.0.1:5055">
+        </label>
+        <button type="submit" class="span2">Save Initialization</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

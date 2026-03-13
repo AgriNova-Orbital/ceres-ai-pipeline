@@ -1,35 +1,26 @@
-# Use Python 3.11 slim image as base
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Set working directory
 WORKDIR /app
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_NO_CACHE=1 \
+    APP_DB_PATH=/app/state/app.db \
+    REDIS_URL=redis://redis:6379/0
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+RUN pip install uv
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --dev --extra ml --extra distributed
 
-# Copy application code
 COPY . .
 
-# Create directories for data and logs
-RUN mkdir -p /app/data /app/logs
+RUN mkdir -p /app/state /app/data /app/runs /app/reports /app/logs
 
-# Expose port for Flask (if needed)
-EXPOSE 5000
+EXPOSE 5055
 
-# Default command
-CMD ["python", "main.py"]
+CMD ["uv", "run", "scripts/main.py"]

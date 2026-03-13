@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+class SQLiteStore:
+    def __init__(self, db_path: Path | str):
+        self.db_path = Path(db_path)
+
+    def _connect(self) -> sqlite3.Connection:
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def ensure_schema(self) -> None:
+        now = _now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    initialized INTEGER NOT NULL DEFAULT 0,
+                    oauth_client_secret_path TEXT,
+                    redirect_base_url TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    google_sub TEXT NOT NULL UNIQUE,
+                    email TEXT NOT NULL,
+                    display_name TEXT,
+                    created_at TEXT NOT NULL,
+                    last_login_at TEXT NOT NULL
+                )
+                """
+            )
+            cur = conn.execute("SELECT id FROM app_settings WHERE id = 1")
+            row = cur.fetchone()
+            if row is None:
+                conn.execute(
+                    """
+                    INSERT INTO app_settings (
+                        id, initialized, oauth_client_secret_path,
+                        redirect_base_url, created_at, updated_at
+                    ) VALUES (1, 0, NULL, NULL, ?, ?)
+                    """,
+                    (now, now),
+                )
+
+    def get_settings(self) -> dict[str, Any]:
+        self.ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT initialized, oauth_client_secret_path, redirect_base_url FROM app_settings WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("app_settings row missing after bootstrap")
+        return {
+            "initialized": bool(row["initialized"]),
+            "oauth_client_secret_path": row["oauth_client_secret_path"],
+            "redirect_base_url": row["redirect_base_url"],
+        }
+
+    def save_settings(
+        self,
+        *,
+        initialized: bool,
+        oauth_client_secret_path: str | None,
+        redirect_base_url: str | None,
+    ) -> None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE app_settings
+                SET initialized = ?,
+                    oauth_client_secret_path = ?,
+                    redirect_base_url = ?,
+                    updated_at = ?
+                WHERE id = 1
+                """,
+                (
+                    1 if initialized else 0,
+                    oauth_client_secret_path,
+                    redirect_base_url,
+                    _now_iso(),
+                ),
+            )
+
+    def get_user_by_google_sub(self, google_sub: str) -> dict[str, Any] | None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, google_sub, email, display_name, created_at, last_login_at FROM users WHERE google_sub = ?",
+                (google_sub,),
+            ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    def get_or_create_user(
+        self,
+        *,
+        google_sub: str,
+        email: str,
+        display_name: str | None,
+    ) -> dict[str, Any]:
+        self.ensure_schema()
+        existing = self.get_user_by_google_sub(google_sub)
+        now = _now_iso()
+        if existing is not None:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE users
+                    SET email = ?, display_name = ?, last_login_at = ?
+                    WHERE google_sub = ?
+                    """,
+                    (email, display_name, now, google_sub),
+                )
+            updated = self.get_user_by_google_sub(google_sub)
+            if updated is None:
+                raise RuntimeError("user disappeared after update")
+            return updated
+
+        user_id = str(uuid.uuid4())
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, google_sub, email, display_name, created_at, last_login_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, google_sub, email, display_name, now, now),
+            )
+        created = self.get_user_by_google_sub(google_sub)
+        if created is None:
+            raise RuntimeError("user missing after insert")
+        return created

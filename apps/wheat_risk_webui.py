@@ -31,6 +31,7 @@ from modules.google_user_oauth import (
     get_google_oauth_redirect_uri,
     get_google_web_client_config,
 )
+from modules.persistence.sqlite_store import SQLiteStore
 
 
 _FAKE_REDIS_SERVER = None
@@ -73,6 +74,10 @@ def get_queue_redis_conn() -> Redis:
 
 def get_queue_conn() -> Queue:
     return Queue(connection=get_queue_redis_conn())
+
+
+def get_oauth_client(oauth: OAuth):
+    return getattr(oauth, "google", oauth)
 
 
 def _now_iso() -> str:
@@ -167,11 +172,28 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     app.config["SECRET_KEY"] = "wheat-risk-webui-dev"
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
+    app_db_path = Path(os.environ.get("APP_DB_PATH", str(root / "instance" / "app.db")))
+    sqlite_store = SQLiteStore(app_db_path)
+    sqlite_store.ensure_schema()
+    app.config["APP_DB_PATH"] = app_db_path
+    app.config["SQLITE_STORE"] = sqlite_store
+    app_settings = sqlite_store.get_settings()
+    app.config["APP_SETTINGS"] = app_settings
 
-    if not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
-        discovered_secret = discover_google_oauth_client_secret_file([root])
-        if discovered_secret is not None:
-            os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(discovered_secret)
+    if app_settings["initialized"]:
+        secret_path = app_settings.get("oauth_client_secret_path")
+        redirect_base = app_settings.get("redirect_base_url")
+        if secret_path and not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
+            os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(secret_path)
+        if redirect_base and not os.environ.get("GOOGLE_OAUTH_REDIRECT_URI"):
+            os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = (
+                str(redirect_base).rstrip("/") + "/auth/callback"
+            )
+    elif os.environ.get("ALLOW_ENV_BOOTSTRAP") == "1":
+        if not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
+            discovered_secret = discover_google_oauth_client_secret_file([root])
+            if discovered_secret is not None:
+                os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(discovered_secret)
 
     try:
         client_id, client_secret, project_id = get_google_web_client_config()
@@ -192,16 +214,59 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.route("/login")
     def login() -> Response:
-        redirect_uri = get_google_oauth_redirect_uri() or url_for(
-            "auth", _external=True
-        )
-        return oauth.google.authorize_redirect(redirect_uri)
+        if not app.config["APP_SETTINGS"]["initialized"]:
+            return redirect(url_for("setup"))
+        redirect_base = app.config["APP_SETTINGS"].get("redirect_base_url")
+        if redirect_base:
+            redirect_uri = str(redirect_base).rstrip("/") + "/auth/callback"
+        else:
+            redirect_uri = get_google_oauth_redirect_uri() or url_for(
+                "auth", _external=True
+            )
+        return get_oauth_client(oauth).authorize_redirect(redirect_uri)
+
+    @app.route("/setup", methods=["GET", "POST"])
+    def setup() -> Response | str:
+        if request.method == "POST":
+            secret_path = request.form.get("oauth_client_secret_path", "").strip()
+            redirect_base = (
+                request.form.get("redirect_base_url", "").strip().rstrip("/")
+            )
+            if not secret_path or not Path(secret_path).exists():
+                flash("OAuth client secret path is missing or invalid.", "error")
+                return render_template("setup.html")
+            if not redirect_base:
+                flash("Redirect base URL is required.", "error")
+                return render_template("setup.html")
+
+            sqlite_store.save_settings(
+                initialized=True,
+                oauth_client_secret_path=secret_path,
+                redirect_base_url=redirect_base,
+            )
+            app.config["APP_SETTINGS"] = sqlite_store.get_settings()
+            os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = secret_path
+            os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = redirect_base + "/auth/callback"
+            flash("Initialization saved.", "success")
+            return redirect(url_for("home"))
+
+        return render_template("setup.html")
 
     @app.route("/auth/callback")
     def auth() -> Response:
-        token = oauth.google.authorize_access_token()
+        token = get_oauth_client(oauth).authorize_access_token()
         session["google_token"] = token
         user = token.get("userinfo") or {}
+        google_sub = str(user.get("sub") or "")
+        email = str(user.get("email") or "")
+        display_name = user.get("name")
+        if google_sub:
+            local_user = sqlite_store.get_or_create_user(
+                google_sub=google_sub,
+                email=email,
+                display_name=str(display_name) if display_name else None,
+            )
+            session["user_id"] = local_user["id"]
         session["user"] = user
         return redirect(url_for("home"))
 
@@ -215,6 +280,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     def require_login() -> Response | None:
         allowed_endpoints = {
             "home",
+            "setup",
             "login",
             "auth",
             "logout",
@@ -224,6 +290,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             return None
         if request.endpoint is None:
             return None
+        if not app.config["APP_SETTINGS"]["initialized"]:
+            return redirect(url_for("setup"))
         if "user" not in session:
             return redirect(url_for("login"))
         return None
@@ -285,6 +353,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             mode = "basic"
 
         is_authenticated = "user" in session
+        if not app.config["APP_SETTINGS"]["initialized"]:
+            return render_template("setup.html")
         raw_dirs = get_raw_data_dirs()
         default_raw_dir = raw_dirs[0]
         raw_tif_paths = get_scanned_raw_tif_paths()
@@ -481,6 +551,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 "expected_weeks": 46,
                 "max_patches": int(max_patches),
                 "oauth_token": session.get("google_token"),
+                "user_id": session.get("user_id"),
             }
             job = queue.enqueue(
                 "modules.jobs.tasks.task_build_dataset",
@@ -547,6 +618,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "runs_dir": "runs",
             "train_script": "scripts/train_staged_model.py",
             "oauth_token": session.get("google_token"),
+            "user_id": session.get("user_id"),
         }
 
         if action != "dry_run":
@@ -601,6 +673,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "best_json": "runs/staged_final/best_model.json",
             "device": "cuda",
             "oauth_token": session.get("google_token"),
+            "user_id": session.get("user_id"),
         }
 
         job = queue.enqueue(

@@ -7,6 +7,20 @@ import numpy as np
 import pytest
 
 
+def _initialize_app(app, tmp_path: Path) -> None:
+    secret = tmp_path / "client_secret.json"
+    secret.write_text(
+        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/auth/callback"]}}',
+        encoding="utf-8",
+    )
+    app.config["SQLITE_STORE"].save_settings(
+        initialized=True,
+        oauth_client_secret_path=str(secret),
+        redirect_base_url="http://127.0.0.1:5055",
+    )
+    app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
+
+
 def _login(client) -> None:
     with client.session_transaction() as sess:
         sess["user"] = {"email": "user@example.com"}
@@ -45,6 +59,7 @@ def test_webui_home_renders_tabs(tmp_path: Path) -> None:
     from apps.wheat_risk_webui import create_app
 
     app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
     resp = client.get("/")
@@ -70,6 +85,7 @@ def test_webui_raw_dir_dropdown_auto_scans_data_directories(tmp_path: Path) -> N
     _mk_fake_tif(de_dir / "week_001.tif")
 
     app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
     resp = client.get("/")
@@ -98,6 +114,7 @@ def test_webui_path_fields_support_scanned_choices_and_custom_input(
     _mk_fake_npz(npz)
 
     app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
     resp = client.get("/")
@@ -120,6 +137,7 @@ def test_raw_preview_endpoint_returns_png(tmp_path: Path) -> None:
     _mk_fake_tif(tif)
 
     app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
     resp = client.get(f"/api/preview/raw?path={tif}")
@@ -135,6 +153,7 @@ def test_patch_preview_endpoint_returns_png(tmp_path: Path) -> None:
     _mk_fake_npz(npz)
 
     app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
     resp = client.get(f"/api/preview/patch?path={npz}&t=1")
@@ -155,6 +174,7 @@ def test_downloader_preview_runs_dry_run_command(
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
 
     app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
     client = app.test_client()
     _login(client)
     resp = client.post(
