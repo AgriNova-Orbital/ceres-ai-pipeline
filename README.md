@@ -90,7 +90,29 @@ Deployment and operations references:
 - `docs/DEPLOYMENT_CHECKLIST.md`
 - `docs/RISK_REVIEW.md`
 
-## 🛠️ Operational CLI Usage
+## 🗺️ Roadmap & Future Work
+
+The following items are planned to expand coverage, robustness, and operational capability.
+
+### Data Source Expansion
+- **Landsat integration**: Ingest Landsat-8/9 Surface Reflectance (SR) via GEE STAC alongside Sentinel-2 for higher revisit rate and sensor fusion.
+- **Multi-sensor fusion strategy**: Define harmonized band mapping (Sentinel-2 vs Landsat) and normalization to a common grid.
+- **Multi-year history (4-5 years)**: Expand the weekly raster archive from 1-year to 4-5 years of continuous coverage to improve temporal robustness.
+- **Weather / climate features**: Integrate auxiliary meteorological variables (temperature, rainfall, humidity, soil moisture) from public climate datasets.
+
+### Model & Training
+- **Model lightweighting**: Evaluate teacher-student distillation, quantization-aware training (QAT), or architecture pruning to reduce footprint while preserving recall.
+- **Spatiotemporal backbone**: Experiment with ConvLSTM / Temporal CNN / TimeSformer to improve sequence consistency.
+- **Self-supervised pretraining**: Explore SSL pretraining on large unlabelled spatiotemporal patches to improve label efficiency.
+- **Threshold calibration**: Automated threshold sweeps across regions/cultivars to produce reproducible operational thresholds.
+
+### Platform & Deployment
+- **Multi-user OAuth (Done)**: Completed as of this release.
+- **Monitoring**: Add structured logging and basic dashboards for queue length, job latency, and resource usage.
+- **Object storage cache**: Optional S3/MinIO cache for staged datasets to speed up re-train cycles.
+- **Container images**: Publish versioned images for `web`, `worker`, and `redis`.
+
+### 🛠️ Operational CLI Usage
 
 For detailed documentation on the pipeline scripts (dataset creation, training, etc.), see [docs/WHEAT_RISK_PIPELINE.md](docs/WHEAT_RISK_PIPELINE.md).
 
