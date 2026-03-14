@@ -28,6 +28,7 @@ def task_build_dataset(kwargs: dict[str, Any]) -> None:
     from modules.services.dataset_service import run_build
 
     kwargs.pop("oauth_token", None)
+    kwargs.pop("user_id", None)
 
     # Convert string paths back to Path objects
     kwargs["input_dir"] = Path(kwargs["input_dir"])
@@ -39,6 +40,7 @@ def task_run_matrix(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.training_matrix_service import run_matrix
 
     kwargs.pop("oauth_token", None)
+    kwargs.pop("user_id", None)
 
     # Convert string paths back to Path objects where necessary
     kwargs["runs_dir"] = Path(kwargs["runs_dir"])
@@ -55,6 +57,7 @@ def task_run_eval(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.evaluation_service import run_evaluation
 
     kwargs.pop("oauth_token", None)
+    kwargs.pop("user_id", None)
 
     # Convert string paths back to Path objects
     kwargs["summary_csv"] = Path(kwargs["summary_csv"])
@@ -67,6 +70,7 @@ def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.inventory_service import run_inventory
 
     kwargs.pop("oauth_token", None)
+    kwargs.pop("user_id", None)
 
     # Convert string paths back to Path objects
     kwargs["input_dir"] = Path(kwargs["input_dir"])
