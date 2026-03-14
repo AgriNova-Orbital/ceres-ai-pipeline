@@ -34,4 +34,4 @@ RUN mkdir -p /app/state /app/data /app/runs /app/reports /app/logs
 
 EXPOSE 5055
 
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "apps.wheat_risk_webui:create_app()"]
+CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "1", "apps.wheat_risk_webui:create_app()"]
