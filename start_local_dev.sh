@@ -1,47 +1,57 @@
 #!/bin/bash
 set -e
 
-# 1. Ensure Redis is running
-if command -v redis-server &> /dev/null; then
-    echo "Redis is already installed. Checking status..."
-    # This assumes systemd or background process
-else
-    echo "No local Redis found. Attempting to start via Docker..."
+# ===========================================
+# 1. Redis Connection Check (Fast, no hang)
+# ===========================================
+export REDIS_URL=redis://localhost:6379/0
+echo "Checking Redis connection at localhost:6379 ..."
+
+python -c "
+import socket, sys
+s = socket.socket()
+s.settimeout(2)
+try:
+    s.connect(('127.0.0.1', 6379))
+    s.close()
+    print('✅ Redis is reachable at 127.0.0.1:6379')
+except:
+    print('❌ Redis is NOT reachable.')
+    sys.exit(1)
+"
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Starting Redis via Docker..."
     if command -v docker &> /dev/null; then
-        # Check if container exists
-        if [ ! "$(docker ps -q -f name=my-redis)" ]; then
-            if [ "$(docker ps -aq -f status=exited -f name=my-redis)" ]; then
-                # Cleanup if exited
-                docker rm my-redis
-            fi
-            echo "Starting Redis container..."
-            docker run -d --name my-redis -p 6379:6379 redis:7-alpine
-        else
-            echo "Redis container is already running."
-        fi
+        docker run -d --name my-redis -p 6379:6379 redis:7-alpine
+        sleep 2
     else
-        echo "Warning: Neither local Redis nor Docker found."
-        echo "Setting USE_FAKEREDIS=1 (Warning: Jobs will not run in background worker)"
-        export USE_FAKEREDIS=1
+        echo "❌ Docker is not installed. Please install Docker or Redis (valkey)."
+        exit 1
     fi
 fi
 
-# 2. Export Redis URL for application
+# ===========================================
+# 2. Service Startup
+# ===========================================
+export PYTHONUNBUFFERED=1
+export RQ_LOG_LEVEL=DEBUG
 export REDIS_URL=redis://localhost:6379/0
 
-# 3. Start Services
-echo "Starting WebUI (Gunicorn, 1 worker) and RQ Worker..."
+echo "Starting services... (Press Ctrl+C to stop)"
 
-# Start RQ Worker in background
-uv run python -m modules.jobs.worker > rq_worker.log 2>&1 &
+# Start WebUI in background, logging to file & terminal
+uv run gunicorn --bind 0.0.0.0:5055 --workers 1 --access-logfile - --log-level debug "apps.wheat_risk_webui:create_app()" > webui.log 2>&1 | tee webui.log &
+WEBUI_PID=$!
+
+# Start RQ Worker in background, logging to file & terminal
+uv run python -m modules.jobs.worker > worker.log 2>&1 | tee worker.log &
 WORKER_PID=$!
 
-# Start WebUI in foreground
-uv run gunicorn --bind 0.0.0.0:5055 --workers 1 "apps.wheat_risk_webui:create_app()"
+# ===========================================
+# 3. Cleanup
+# ===========================================
+trap "echo 'Shutting down...'; kill $WEBUI_PID $WORKER_PID; docker stop my-redis &> /dev/null; docker rm my-redis &> /dev/null" EXIT
 
-# Cleanup on exit
-kill $WORKER_PID
-if command -v docker &> /dev/null && [ "$(docker ps -q -f name=my-redis)" ]; then
-    docker stop my-redis
-    docker rm my-redis
-fi
+wait

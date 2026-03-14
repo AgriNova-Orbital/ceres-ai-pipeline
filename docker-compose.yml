@@ -9,13 +9,14 @@ services:
   web:
     build: .
     container_name: ceres-web
-    command: ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "apps.wheat_risk_webui:create_app()"]
+    command: ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "1", "--access-logfile", "-", "--log-level", "debug", "apps.wheat_risk_webui:create_app()"]
     depends_on:
       - redis
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
       - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/app/state/client_secret.json
+      - PYTHONUNBUFFERED=1
     ports:
       - "5055:5055"
     volumes:
@@ -29,12 +30,14 @@ services:
   worker:
     build: .
     container_name: ceres-worker
-    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    command: ["uv", "run", "python", "-m", "modules.jobs.worker"]
     depends_on:
       - redis
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - RQ_LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
       - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/app/state/client_secret.json
     volumes:
       - app_state:/app/state
