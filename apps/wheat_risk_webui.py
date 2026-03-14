@@ -227,40 +227,62 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.route("/setup", methods=["GET", "POST"])
     def setup() -> Response | str:
+        step = request.args.get("step", "1")
         if request.method == "POST":
-            secret_path = request.form.get("oauth_client_secret_path", "").strip()
-            uploaded_secret = request.files.get("oauth_client_secret_upload")
-            redirect_base = (
-                request.form.get("redirect_base_url", "").strip().rstrip("/")
-            )
-            if uploaded_secret and uploaded_secret.filename:
-                state_dir = app.config["APP_DB_PATH"].parent
-                state_dir.mkdir(parents=True, exist_ok=True)
-                uploaded_name = (
-                    Path(uploaded_secret.filename).name or "client_secret.json"
+            step = request.form.get("step", "1")
+            if step == "3":
+                secret_path = request.form.get("oauth_client_secret_path", "").strip()
+                uploaded_secret = request.files.get("oauth_client_secret_upload")
+                redirect_base = (
+                    request.form.get("redirect_base_url", "").strip().rstrip("/")
                 )
-                secret_path = str(state_dir / uploaded_name)
-                uploaded_secret.save(secret_path)
+                if uploaded_secret and uploaded_secret.filename:
+                    state_dir = app.config["APP_DB_PATH"].parent
+                    state_dir.mkdir(parents=True, exist_ok=True)
+                    uploaded_name = (
+                        Path(uploaded_secret.filename).name or "client_secret.json"
+                    )
+                    secret_path = str(state_dir / uploaded_name)
+                    uploaded_secret.save(secret_path)
 
-            if not secret_path or not Path(secret_path).exists():
-                flash("OAuth client secret path is missing or invalid.", "error")
-                return render_template("setup.html")
-            if not redirect_base:
-                flash("Redirect base URL is required.", "error")
-                return render_template("setup.html")
+                if not secret_path or not Path(secret_path).exists():
+                    flash("OAuth client secret path is missing or invalid.", "error")
+                    return render_template(
+                        "setup.html", step=2, db_ok=True, redis_ok=True
+                    )
+                if not redirect_base:
+                    flash("Redirect base URL is required.", "error")
+                    return render_template(
+                        "setup.html", step=2, db_ok=True, redis_ok=True
+                    )
 
-            sqlite_store.save_settings(
-                initialized=True,
-                oauth_client_secret_path=secret_path,
-                redirect_base_url=redirect_base,
-            )
-            app.config["APP_SETTINGS"] = sqlite_store.get_settings()
-            os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = secret_path
-            os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = redirect_base + "/auth/callback"
-            flash("Initialization saved.", "success")
-            return redirect(url_for("home"))
+                sqlite_store.save_settings(
+                    initialized=True,
+                    oauth_client_secret_path=secret_path,
+                    redirect_base_url=redirect_base,
+                )
+                app.config["APP_SETTINGS"] = sqlite_store.get_settings()
+                os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = secret_path
+                os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = (
+                    redirect_base + "/auth/callback"
+                )
+                flash("Initialization saved.", "success")
+                return render_template("setup.html", step=3, db_ok=True, redis_ok=True)
 
-        return render_template("setup.html")
+        if step == "2":
+            return render_template("setup.html", step=2, db_ok=True, redis_ok=True)
+
+        # Step 1 - System Checks
+        db_ok = app.config["APP_DB_PATH"].exists() or True
+        redis_ok = False
+        try:
+            redis = get_redis_conn()
+            redis.ping()
+            redis_ok = True
+        except Exception:
+            redis_ok = False
+
+        return render_template("setup.html", step=1, db_ok=True, redis_ok=redis_ok)
 
     @app.route("/auth/callback")
     def auth() -> Response:

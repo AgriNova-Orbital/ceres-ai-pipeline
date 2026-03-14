@@ -3,13 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ceres AI Pipeline Initialization</title>
+  <title>Ceres AI Pipeline Setup</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='wheat_risk_webui.css') }}">
+  <style>
+    .wizard-steps { list-style: none; display: flex; gap: 1rem; padding: 0; margin-bottom: 1.5rem; justify-content: center; }
+    .wizard-steps li { padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 6px; opacity: 0.6; }
+    .wizard-steps li.active { opacity: 1; border-color: #185574; font-weight: bold; background: #eef3f7; }
+    .step { display: none; }
+    .step.active { display: block; }
+    .success-box { border: 1px solid #28a745; background: #d4edda; color: #155724; padding: 1rem; border-radius: 6px; }
+  </style>
 </head>
 <body>
   <header>
-    <h1>Ceres AI Pipeline</h1>
-    <p class="sub">Initialization</p>
+    <h1>Ceres AI Pipeline Setup</h1>
+    <p class="sub">Initialization Wizard</p>
   </header>
 
   {% with msgs = get_flashed_messages(with_categories=true) %}
@@ -24,20 +32,57 @@
 
   <main>
     <section class="card">
-      <h2>Initialization</h2>
-      <p>Before using Google OAuth, configure the deployment-local OAuth client secret and redirect base URL.</p>
-      <form method="post" action="{{ url_for('setup') }}" class="grid" enctype="multipart/form-data">
-        <label class="span2">OAuth client secret path
-          <input name="oauth_client_secret_path" placeholder="/app/state/client_secret_xxx.json">
-        </label>
-        <label class="span2">Upload OAuth client secret JSON
-          <input type="file" name="oauth_client_secret_upload" accept=".json,application/json">
-        </label>
-        <label class="span2">Redirect base URL
-          <input name="redirect_base_url" placeholder="http://127.0.0.1:5055">
-        </label>
-        <button type="submit" class="span2">Save Initialization</button>
-      </form>
+      <ul class="wizard-steps">
+        <li class="{{ 'active' if step == 1 else '' }}">1. Checks</li>
+        <li class="{{ 'active' if step == 2 else '' }}">2. Credentials</li>
+        <li class="{{ 'active' if step == 3 else '' }}">3. Finish</li>
+      </ul>
+
+      {% if step == 1 %}
+      <div class="step active">
+        <h2>System Checks</h2>
+        <p>Running environment checks...</p>
+        <ul>
+          <li>App DB: <strong>{{ 'OK' if db_ok else 'MISSING' }}</strong></li>
+          <li>Redis: <strong>{{ 'OK' if redis_ok else 'FAIL' }}</strong></li>
+        </ul>
+        <form method="get" action="{{ url_for('setup') }}">
+          <input type="hidden" name="step" value="2">
+          <button type="submit">Next</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if step == 2 %}
+      <div class="step active">
+        <h2>OAuth Configuration</h2>
+        <p>Before using Google OAuth, configure the deployment-local OAuth client secret and redirect base URL.</p>
+        <form method="post" action="{{ url_for('setup') }}" enctype="multipart/form-data" class="grid">
+          <input type="hidden" name="step" value="3">
+          <label class="span2">OAuth client secret path
+            <input name="oauth_client_secret_path" placeholder="/app/state/client_secret_xxx.json">
+          </label>
+          <label class="span2">Upload OAuth client secret JSON
+            <input type="file" name="oauth_client_secret_upload" accept=".json,application/json">
+          </label>
+          <label class="span2">Redirect base URL
+            <input name="redirect_base_url" placeholder="http://127.0.0.1:5055">
+          </label>
+          <button type="submit" class="span2">Save and Finish</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if step == 3 %}
+      <div class="step active">
+        <div class="success-box">
+          <h2>Initialization Saved</h2>
+          <p>Google OAuth has been configured. You can now sign in.</p>
+        </div>
+        <br>
+        <a href="{{ url_for('home') }}" class="span2"><button>Go to Dashboard</button></a>
+      </div>
+      {% endif %}
     </section>
   </main>
 </body>

@@ -26,8 +26,7 @@ def test_home_shows_setup_screen_when_not_initialized(client):
     resp = client.get("/")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
-    assert "Initialization" in body
-    assert "OAuth client secret path" in body
+    assert "Checks" in body
 
 
 def test_login_redirects_to_setup_when_not_initialized(client):
@@ -46,13 +45,16 @@ def test_setup_post_persists_settings(client, tmp_path: Path):
     resp = client.post(
         "/setup",
         data={
+            "step": "3",
             "oauth_client_secret_path": str(secret),
             "redirect_base_url": "http://127.0.0.1:5055",
         },
         follow_redirects=False,
     )
-    assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/")
+    assert resp.status_code == 200
+    assert "Initialization Saved" in resp.get_data(
+        as_text=True
+    ) or "Go to Dashboard" in resp.get_data(as_text=True)
 
     from modules.persistence.sqlite_store import SQLiteStore
 
@@ -73,6 +75,7 @@ def test_setup_post_can_store_uploaded_client_secret(client, tmp_path: Path):
     resp = client.post(
         "/setup",
         data={
+            "step": "3",
             "oauth_client_secret_path": "",
             "redirect_base_url": "http://127.0.0.1:5055",
             "oauth_client_secret_upload": (payload, "client_secret_uploaded.json"),
@@ -80,7 +83,10 @@ def test_setup_post_can_store_uploaded_client_secret(client, tmp_path: Path):
         content_type="multipart/form-data",
         follow_redirects=False,
     )
-    assert resp.status_code == 302
+    assert resp.status_code == 200
+    assert "Initialization Saved" in resp.get_data(
+        as_text=True
+    ) or "Go to Dashboard" in resp.get_data(as_text=True)
 
     from modules.persistence.sqlite_store import SQLiteStore
 
