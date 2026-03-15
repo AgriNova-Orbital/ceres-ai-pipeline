@@ -1,15 +1,23 @@
 # Ceres AI Pipeline
 
-**A machine learning pipeline for wheat rust risk prediction by AgriNova-Orbital**
+**A machine learning pipeline for NDVI forecasting and wheat rust risk analysis by AgriNova-Orbital**
 
-This project demonstrates a Python-based pipeline for predicting wheat rust risk using Sentinel-2 time-series data and a CNN-LSTM model.
+This project demonstrates a Python-based pipeline for predicting next-week NDVI (Normalized Difference Vegetation Index) from Sentinel-2 time-series data using a CNN-LSTM regression model.
+
+> **⚠️ Target Leakage Notice:** Statistical analysis confirmed that the original risk labels
+> (band 11) in the France 2025 GeoTIFF dataset equal `1 − NDVI` (band 1) to within float32
+> machine epsilon — training on them teaches only the trivial identity, not genuine predictive
+> signal. As of PR #4 and PR #6, the pipeline has fully transitioned to **NDVI time-series
+> forecasting** (MSE regression) as the primary training task. The deprecated
+> `train_wheat_risk_lstm.py` script is retained for reference only; use
+> `train_ndvi_forecast.py` and `build_ndvi_forecast_dataset.py` for all new training.
 
 ## 🌟 Features
 
 - **Data Downloader**: Fetch Sentinel-2 data via Earth Engine (STAC/Drive)
-- **Dataset Builder**: Parallel patch extraction and weekly cadence interpolation
-- **Staged Training Matrix**: Nested-loop execution for experimenting with image granularity and sample sizes
-- **Evaluation & Model Selection**: Automated threshold tuning for recall-first risk detection
+- **Dataset Builder**: Parallel patch extraction and NDVI forecasting window construction (`build_ndvi_forecast_dataset.py`)
+- **Staged Training Matrix**: Nested-loop execution for experimenting with image granularity and sample sizes (NDVI regression, MSE loss)
+- **Evaluation & Model Selection**: MSE-based model comparison across matrix cells
 - **WebUI Control Panel**: A Flask-based interface to orchestrate the pipeline and preview images
 
 ## 🚀 Quick Start
@@ -122,12 +130,12 @@ For detailed documentation on the pipeline scripts (dataset creation, training, 
 
 If you later expand the source data date range (for example from 2025-only to multi-year), use this sequence:
 
-1. Export weekly risk rasters for the new window (dry-run first, then run).
+1. Export weekly rasters for the new window (dry-run first, then run).
 2. Ingest/download the new GeoTIFFs to raw storage.
 3. Run date inventory to verify 7-day completeness and check missing dates.
-4. Rebuild staged datasets (L1/L2/L4) from the expanded raw set.
-5. Re-run staged matrix training and evaluation.
-6. Promote the new best checkpoint and threshold.
+4. Rebuild per-level NDVI forecasting datasets (L1/L2/L4) from the expanded raw set.
+5. Re-run staged matrix training (NDVI regression, MSE loss) and evaluation.
+6. Promote the new best checkpoint.
 
 Example commands:
 
@@ -155,33 +163,33 @@ uv run scripts/inventory_wheat_dates.py \
   --start-date 2025-01-01 \
   --cadence-days 7
 
-# 3) Rebuild staged datasets
-uv run scripts/build_npz_dataset_from_geotiffs.py \
+# 3) Rebuild per-level NDVI forecasting datasets
+#    (replaces the old build_npz_dataset_from_geotiffs.py approach)
+uv run scripts/build_ndvi_forecast_dataset.py \
   --input-dir data/raw/france_2025_weekly \
-  --output-dir data/wheat_risk/staged/L1 \
-  --patch-size 64 --step-size 64 --expected-weeks 46 --max-patches 12000
+  --output-dir data/ndvi_forecast/L1 \
+  --window-size 4 --patch-size 64 --step-size 32
 
-uv run scripts/build_npz_dataset_from_geotiffs.py \
+uv run scripts/build_ndvi_forecast_dataset.py \
   --input-dir data/raw/france_2025_weekly \
-  --output-dir data/wheat_risk/staged/L2 \
-  --patch-size 32 --step-size 32 --expected-weeks 46 --max-patches 12000
+  --output-dir data/ndvi_forecast/L2 \
+  --window-size 4 --patch-size 32 --step-size 16
 
-uv run scripts/build_npz_dataset_from_geotiffs.py \
+uv run scripts/build_ndvi_forecast_dataset.py \
   --input-dir data/raw/france_2025_weekly \
-  --output-dir data/wheat_risk/staged/L4 \
-  --patch-size 16 --step-size 16 --expected-weeks 46 --max-patches 12000
+  --output-dir data/ndvi_forecast/L4 \
+  --window-size 4 --patch-size 16 --step-size 8
 
-# 4) Re-train matrix and re-evaluate
+# 4) Re-train NDVI regression matrix and re-evaluate
 uv run scripts/run_staged_training_matrix.py \
   --run --execute-train \
   --levels 1,2,4 --steps 100,500,2000 --base-patch 64 \
-  --index-csv-template ./data/wheat_risk/staged/L{level}/index.csv \
-  --root-dir-template ./data/wheat_risk/staged/L{level} --device cuda
+  --index-csv-template ./data/ndvi_forecast/L{level}/index.csv \
+  --runs-dir runs/ndvi_staged --device cuda
 
 uv run scripts/eval_staged_training_matrix.py \
-  --summary-csv runs/staged_final/summary.csv \
-  --index-csv-template ./data/wheat_risk/staged/L{level}/index.csv \
-  --root-dir-template ./data/wheat_risk/staged/L{level}
+  --summary-csv runs/ndvi_staged/summary.csv \
+  --index-csv-template ./data/ndvi_forecast/L{level}/index.csv
 ```
 
 WebUI planning reference:

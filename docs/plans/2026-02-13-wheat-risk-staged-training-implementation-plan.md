@@ -1,5 +1,13 @@
 # Wheat Risk 2D Staged Training Implementation Plan
 
+> **Historical Note (added post-PR #4 / PR #6):** This implementation plan was written for
+> the original Risk classification model using `train_wheat_risk_lstm.py`. Following the
+> discovery of target leakage, the 2D staged training matrix now trains the **NDVI
+> regression model** (`train_ndvi_forecast.py`, MSE loss) on datasets produced by
+> `build_ndvi_forecast_dataset.py`. The tech stack references to `train_wheat_risk_lstm.py`
+> below reflect the original plan and are superseded by the NDVI forecasting workflow.
+> See `docs/WHEAT_RISK_PIPELINE.md` sections 5, 7, and 8 for the current instructions.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build a reproducible pipeline that inventories weekly-date completeness and executes nested-loop 2D staged training (image granularity outer loop, sample size inner loop).
