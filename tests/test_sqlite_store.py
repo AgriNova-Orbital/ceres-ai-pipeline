@@ -84,6 +84,7 @@ def test_create_app_bootstraps_sqlite_store_from_app_db_path(
     assert app.config["SQLITE_STORE"].get_settings()["initialized"] is False
     assert db_path.exists()
 
+
 def test_sqlite_store_persists_user_oauth_token(tmp_path: Path):
     from modules.persistence.sqlite_store import SQLiteStore
 
@@ -102,4 +103,31 @@ def test_sqlite_store_persists_user_oauth_token(tmp_path: Path):
     }
 
     store.save_user_oauth_token(user_id=user["id"], token=token)
-    assert store.get_user_oauth_token(user["id"]) == token
+    retrieved = store.get_user_oauth_token(user["id"])
+    assert retrieved == token
+
+
+def test_sqlite_store_deletes_user_oauth_token(tmp_path: Path):
+    from modules.persistence.sqlite_store import SQLiteStore
+
+    store = SQLiteStore(tmp_path / "app.db")
+    store.ensure_schema()
+    user = store.get_or_create_user(
+        google_sub="sub-123",
+        email="user@example.com",
+        display_name="Demo User",
+    )
+
+    token = {
+        "access_token": "access-123",
+        "refresh_token": "refresh-456",
+        "scope": "openid email profile",
+    }
+
+    store.save_user_oauth_token(user_id=user["id"], token=token)
+    retrieved = store.get_user_oauth_token(user["id"])
+    assert retrieved is not None
+
+    store.delete_user_oauth_token(user["id"])
+    retrieved = store.get_user_oauth_token(user["id"])
+    assert retrieved is None
