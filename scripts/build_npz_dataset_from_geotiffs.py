@@ -4,23 +4,17 @@ Input:
   A directory of weekly GeoTIFFs exported from GEE, one file per week.
   Expected naming: fr_wheat_feat_YYYYWww.tif (e.g. fr_wheat_feat_2025W01.tif)
   Expected band order: 10 feature bands + 1 risk band (risk is last).
-  GeoTIFFs with nodata/masked pixels are supported: see --min-valid-ratio.
 
 Output:
   output_dir/
     index.csv          (column: npz_path)
     examples/*.npz     each NPZ contains:
-      - X: (T, C+1, H, W) float32  – C feature bands + 1 validity mask channel
-      - y: (T,) float32             – mean risk over valid pixels per week (NaN when unavailable)
-      - M: (T, 1, H, W) float32    – standalone validity mask (1=valid, 0=invalid/nodata)
-
-  X is always fully finite: invalid/nodata pixels are imputed to 0 and flagged
-  via the mask channel so the model can distinguish real observations from fill
-  values. A patch is discarded if its mean valid ratio is below --min-valid-ratio.
+      - X: (T, C, H, W) float32
+      - y: (T,) float32   (mean risk over the patch per week)
 
 Notes:
   This format matches modules.wheat_risk.dataset.WheatRiskNpzSequenceDataset and
-  scripts/train_wheat_risk_lstm.py (in_channels is inferred automatically from X.shape[1]).
+  scripts/train_wheat_risk_lstm.py.
 """
 
 from __future__ import annotations
@@ -141,15 +135,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=64,
         help="GDAL cache size (MiB) per process to cap memory usage.",
     )
-    p.add_argument(
-        "--min-valid-ratio",
-        type=float,
-        default=0.05,
-        help=(
-            "Minimum fraction of valid (non-masked, finite) pixels required to keep a patch. "
-            "Patches below this threshold are discarded. Default: 0.05."
-        ),
-    )
     return p
 
 
@@ -230,7 +215,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_patches=args.max_patches,
             seed=args.seed,
             skip_existing=args.skip_existing,
-            min_valid_ratio=args.min_valid_ratio,
         )
     except (ValueError, RuntimeError) as e:
         raise SystemExit(str(e)) from e
