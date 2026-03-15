@@ -114,3 +114,53 @@ class WheatRiskNpzSequenceDataset:
         x_t = torch.from_numpy(np.asarray(x)).to(dtype=torch.float32)
         y_t = torch.from_numpy(np.asarray(y)).to(dtype=torch.float32)
         return x_t, y_t
+
+
+class NdviForecastDataset:
+    """Dataset of NPZ samples for NDVI forecasting (scalar regression).
+
+    Each NPZ must contain:
+    - X: (W, C, H, W) — W input weeks of feature bands (+ mask channel)
+    - y: scalar float32 — next-week mean NDVI
+    """
+
+    def __init__(
+        self, index_csv: str | Path, root_dir: str | Path | None = None
+    ) -> None:
+        self.index_csv = Path(index_csv)
+        self.root_dir = (
+            Path(root_dir) if root_dir is not None else self.index_csv.parent
+        )
+
+        if not self.index_csv.exists():
+            raise FileNotFoundError(self.index_csv)
+
+        self.examples = _read_index_csv(self.index_csv)
+        if not self.examples:
+            raise ValueError(f"No examples found in {self.index_csv}")
+
+    def __len__(self) -> int:
+        return len(self.examples)
+
+    def __getitem__(self, idx: int):
+        torch = _import_torch()
+
+        ex = self.examples[idx]
+        p = ex.npz_path
+        if not p.is_absolute():
+            p = self.root_dir / p
+
+        with np.load(p, allow_pickle=False) as z:
+            if "X" not in z or "y" not in z:
+                raise KeyError(f"NPZ must contain arrays 'X' and 'y': {p}")
+            x = z["X"]
+            y = z["y"]
+
+        if x.ndim != 4:
+            raise ValueError(f"X must have shape (W, C, H, W), got {x.shape} from {p}")
+        if y.ndim != 0:
+            raise ValueError(f"y must be a scalar, got shape {y.shape} from {p}")
+
+        x_t = torch.from_numpy(np.asarray(x)).to(dtype=torch.float32)
+        y_t = torch.tensor(float(y), dtype=torch.float32)
+        return x_t, y_t

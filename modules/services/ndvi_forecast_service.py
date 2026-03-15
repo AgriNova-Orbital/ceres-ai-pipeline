@@ -36,8 +36,8 @@ The dataset is NOT directly compatible with
 ``modules.wheat_risk.dataset.WheatRiskNpzSequenceDataset`` because ``y`` here
 is a scalar float32 (next-week mean NDVI — a regression target), while that
 dataset enforces ``y.ndim == 1`` and ``len(y) == X.shape[0]`` for sequence
-classification. A dedicated scalar-regression dataset/training script is
-required to consume this format.
+classification. Use ``modules.wheat_risk.dataset.NdviForecastDataset`` and
+``scripts/train_ndvi_forecast.py`` to train on this format.
 
 Usage
 -----

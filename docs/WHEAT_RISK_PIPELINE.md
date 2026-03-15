@@ -284,9 +284,66 @@ For a dataset with T weeks, each spatial patch location produces up to `T − W`
 
 ---
 
-## 8. Diagnostic Scripts
+## 8. NDVI Forecast Model Training
+**Script**: `scripts/train_ndvi_forecast.py`
 
-### 8a. GeoTIFF Pixel Statistics
+### Goal
+Trains a CNN+LSTM regression model (`CnnLstmRegressor`) on the NDVI forecasting dataset produced in section 7.  The model predicts next-week mean NDVI from the previous W weeks of feature bands using MSE loss.
+
+### Usage
+```bash
+# Basic training on CPU
+uv run scripts/train_ndvi_forecast.py \
+  --index-csv data/ndvi_forecast/window4/index.csv \
+  --epochs 20 \
+  --batch-size 16 \
+  --device cpu
+
+# GPU training with checkpoint saving
+uv run scripts/train_ndvi_forecast.py \
+  --index-csv data/ndvi_forecast/window4/index.csv \
+  --epochs 20 \
+  --batch-size 16 \
+  --device cuda \
+  --save-path runs/ndvi_forecast/model.pt
+
+# Resume from checkpoint
+uv run scripts/train_ndvi_forecast.py \
+  --index-csv data/ndvi_forecast/window4/index.csv \
+  --epochs 10 \
+  --batch-size 16 \
+  --device cuda \
+  --load-path runs/ndvi_forecast/model.pt \
+  --save-path runs/ndvi_forecast/model_v2.pt
+
+# Reproducible run with fixed seed
+uv run scripts/train_ndvi_forecast.py \
+  --index-csv data/ndvi_forecast/window4/index.csv \
+  --epochs 20 \
+  --batch-size 16 \
+  --device cuda \
+  --seed 42 --deterministic \
+  --save-path runs/ndvi_forecast/model.pt
+```
+
+### Expected Results
+- Prints training progress per epoch: MSE loss, skipped batches (NaN targets, invalid gradients).
+- Saves a PyTorch state dict checkpoint to `--save-path` (if specified).
+
+### Key differences from `train_wheat_risk_lstm.py`
+| | `train_wheat_risk_lstm.py` | `train_ndvi_forecast.py` |
+|---|---|---|
+| **Task** | Per-timestep risk classification | Scalar NDVI regression |
+| **Loss** | BCEWithLogitsLoss | MSELoss |
+| **y shape** | `(T,)` sequence | scalar |
+| **Dataset class** | `WheatRiskNpzSequenceDataset` | `NdviForecastDataset` |
+| **Model** | `CnnLstmRisk` | `CnnLstmRegressor` |
+
+---
+
+## 9. Diagnostic Scripts
+
+### 9a. GeoTIFF Pixel Statistics
 **Script**: `scripts/inspect_geotiff_stats.py`
 
 Reports NaN ratio, finite ratio, zero ratio, and nanmin/nanmax/nanmean for each band across all GeoTIFFs in a directory. Run this before the expensive build step to understand data quality.
@@ -296,7 +353,7 @@ uv run scripts/inspect_geotiff_stats.py --input-dir data/raw/france_2025_weekly
 uv run scripts/inspect_geotiff_stats.py --input-dir data/raw/france_2025_weekly --bands 1,11
 ```
 
-### 8b. Band Complement Verification
+### 9b. Band Complement Verification
 **Script**: `scripts/verify_geotiff_band_complement.py`
 
 Checks whether `band_a + band_b ≈ 1.0` for all valid pixels in each file. Values at or below float32 machine epsilon (`~1.19e-07`) confirm that the bands are mathematical complements — which in this dataset proves that the risk label is derived from NDVI (target leakage).
@@ -333,10 +390,8 @@ uv run scripts/verify_geotiff_band_complement.py --input-dir data/raw/france_202
         --window-size 4 --patch-size 32 --step-size 16
 
 4. Train on the NDVI forecasting dataset:
-   NOTE: scripts/train_wheat_risk_lstm.py trains a SEQUENCE CLASSIFIER
-   (BCEWithLogitsLoss, y shape (T,)) and is NOT compatible with the scalar
-   NDVI regression target produced in step 3b. A dedicated regression
-   training script is needed for the NDVI forecasting task. The risk-
-   classification script can only be used when independent (non-leakage)
-   risk labels are available (step 3a).
+   uv run scripts/train_ndvi_forecast.py \
+       --index-csv data/ndvi_forecast/window4/index.csv \
+       --epochs 20 --batch-size 16 --device cuda \
+       --save-path runs/ndvi_forecast/model.pt
 ```
