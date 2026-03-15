@@ -249,3 +249,66 @@ def test_downloader_preview_export_passes_oauth_env_to_run_script(
     _, kwargs = mock_queue.enqueue.call_args
     env_overrides = kwargs["kwargs"]["env_overrides"]
     assert "GOOGLE_OAUTH_TOKEN_JSON" in env_overrides
+
+
+def test_make_redis_conn_honours_redis_url_env(monkeypatch):
+    """_make_redis_conn should use REDIS_URL when set."""
+    monkeypatch.delenv("USE_FAKEREDIS", raising=False)
+    monkeypatch.setenv("REDIS_URL", "redis://custom-host:7777/3")
+
+    from apps.wheat_risk_webui import _make_redis_conn
+
+    conn = _make_redis_conn(decode_responses=True)
+    pool = conn.connection_pool
+    kw = pool.connection_kwargs
+    assert kw.get("host") == "custom-host"
+    assert kw.get("port") == 7777
+    assert kw.get("db") == 3
+
+
+def test_api_jobs_includes_started_and_finished_jobs(monkeypatch, tmp_path: Path):
+    """The /api/jobs endpoint should return started/finished jobs, not just queued."""
+    monkeypatch.setenv("USE_FAKEREDIS", "1")
+
+    from apps.wheat_risk_webui import create_app, get_queue_conn
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client)
+
+    from rq.job import Job
+
+    q = get_queue_conn()
+    job = q.enqueue("time.sleep", 0)
+
+    # Manually move the job to the finished registry to simulate completion
+    job.set_status("finished")
+    q.finished_job_registry.add(job, ttl=3600)
+    q.remove(job.id)
+
+    resp = client.get("/api/jobs")
+    assert resp.status_code == 200
+    data = resp.json
+    assert isinstance(data, list)
+    job_ids = [r["id"] for r in data]
+    assert job.id in job_ids
+
+
+def test_worker_fakeredis_uses_shared_server(monkeypatch):
+    """Worker FakeRedis mode should use a shared FakeServer for state sharing."""
+    import modules.jobs.worker as w
+    from modules.jobs.worker import _make_redis_conn as _make_worker_redis_conn
+
+    monkeypatch.setenv("USE_FAKEREDIS", "1")
+    # Reset any cached FakeRedis server state, if present.
+    if hasattr(w, "_FAKE_REDIS_SERVER"):
+        w._FAKE_REDIS_SERVER = None
+
+    # Use the same helper that worker.main() uses to obtain Redis connections.
+    conn1 = _make_worker_redis_conn()
+    conn2 = _make_worker_redis_conn()
+
+    conn1.set("test_key", "test_val")
+    # Both connections should see the same value, implying a shared FakeServer.
+    assert conn2.get("test_key") == conn1.get("test_key")
