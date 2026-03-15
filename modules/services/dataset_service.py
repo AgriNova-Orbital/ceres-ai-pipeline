@@ -188,12 +188,6 @@ def _close_srcs(srcs: Sequence[Any | None]) -> None:
         except Exception:
             pass
 
-def _safe_nanmean(arr: np.ndarray) -> np.float32:
-    finite = np.isfinite(arr)
-    if not bool(finite.any()):
-        return np.float32(np.nan)
-    return np.float32(arr[finite].mean())
-
 def _build_patch_and_save(
     *,
     row: int,

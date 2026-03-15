@@ -50,9 +50,20 @@ The `--output-dir` will contain:
 
 GeoTIFF inputs with nodata values or NaN pixels are handled robustly:
 
-- Per-pixel validity is determined by combining rasterio's raster mask (`read_masks`) with a finite-value check.  
+- Per-pixel validity is determined by combining rasterio's raster mask (`read_masks`) with a finite-value check (`np.isfinite`).  
 - Invalid pixels in feature bands are imputed to `0.0`; a mask channel (`M`) is appended to `X` so the model can distinguish real observations from fill values.  
 - A patch is kept if its **mean valid ratio** (fraction of valid pixels across all time steps) is at or above `--min-valid-ratio` (default `0.05`). Patches below this threshold are discarded.
+
+#### GEE exports (nodata = null)
+
+GeoTIFFs exported from Google Earth Engine typically have **no nodata value registered** (`nodata = null` in raster metadata). In this case rasterio's `read_masks()` returns all-255 (all valid), so validity is determined entirely by the `np.isfinite()` check — masked pixels are stored as NaN float32 in the data itself. The pipeline handles this automatically; no extra flags are needed.
+
+```text
+# Typical production raster profile (France weekly wheat dataset):
+# bands: 11  (bands 1-10 = feature bands, band 11 = risk label)
+# nodata: null  (invalids stored as NaN — GEE export convention)
+# X output shape: (T, 11, H, W)  — 10 feature channels + 1 mask channel
+```
 
 To tune the threshold:
 ```bash
