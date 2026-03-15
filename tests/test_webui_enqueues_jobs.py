@@ -298,16 +298,17 @@ def test_api_jobs_includes_started_and_finished_jobs(monkeypatch, tmp_path: Path
 def test_worker_fakeredis_uses_shared_server(monkeypatch):
     """Worker FakeRedis mode should use a shared FakeServer for state sharing."""
     import modules.jobs.worker as w
+    from modules.jobs.worker import _make_redis_conn as _make_worker_redis_conn
 
     monkeypatch.setenv("USE_FAKEREDIS", "1")
-    w._FAKE_REDIS_SERVER = None  # reset
+    # Reset any cached FakeRedis server state, if present.
+    if hasattr(w, "_FAKE_REDIS_SERVER"):
+        w._FAKE_REDIS_SERVER = None
 
-    from fakeredis import FakeServer, FakeStrictRedis
+    # Use the same helper that worker.main() uses to obtain Redis connections.
+    conn1 = _make_worker_redis_conn()
+    conn2 = _make_worker_redis_conn()
 
-    # Simulate what happens in worker.main() for FakeRedis path
-    if w._FAKE_REDIS_SERVER is None:
-        w._FAKE_REDIS_SERVER = FakeServer()
-    conn1 = FakeStrictRedis(server=w._FAKE_REDIS_SERVER)
-    conn2 = FakeStrictRedis(server=w._FAKE_REDIS_SERVER)
     conn1.set("test_key", "test_val")
-    assert conn2.get("test_key") == b"test_val"
+    # Both connections should see the same value, implying a shared FakeServer.
+    assert conn2.get("test_key") == conn1.get("test_key")
