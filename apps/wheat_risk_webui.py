@@ -88,23 +88,31 @@ def _normalize_channel(x: np.ndarray) -> np.ndarray:
     x = np.asarray(x, dtype=np.float32)
     finite = np.isfinite(x)
     if not bool(np.any(finite)):
-        return np.zeros_like(x, dtype=np.uint8)
+        return np.zeros_like(x, dtype=np.uint8)  # Return black if all NaN
     vals = x[finite]
     lo = float(np.percentile(vals, 2.0))
     hi = float(np.percentile(vals, 98.0))
     if hi <= lo:
         hi = lo + 1e-6
-    y = np.nan_to_num(x, nan=lo, posinf=hi, neginf=lo)
-    y = np.clip((y - lo) / (hi - lo), 0.0, 1.0)
+    y = np.where(finite, (x - lo) / (hi - lo), 0.0)  # Map NaN to 0
+    y = np.clip(y, 0.0, 1.0)
     return (y * 255.0).astype(np.uint8)
 
 
 def _to_rgb(chw: np.ndarray) -> np.ndarray:
     if chw.ndim != 3:
         raise ValueError("Expected CHW array")
-    c = int(chw.shape[0])
+    c, h, w = chw.shape
     if c <= 0:
         raise ValueError("No channels to render")
+
+    # Handle fully NaN / zero case by returning a distinct color (e.g. dark red grid or blank)
+    if not np.isfinite(chw).any():
+        rgb = np.zeros((h, w, 3), dtype=np.uint8)
+        # Add a cross pattern or checkerboard to indicate "Missing Data" instead of just black
+        rgb[::2, ::2, 0] = 128
+        rgb[1::2, 1::2, 0] = 128
+        return rgb
 
     if c == 1:
         c0 = _normalize_channel(chw[0])
@@ -137,7 +145,8 @@ def _render_png(rgb: np.ndarray) -> bytes:
 
     rgb_u8 = np.asarray(rgb, dtype=np.uint8)
     buf = io.BytesIO()
-    plt.imsave(buf, rgb_u8)
+    plt.imsave(buf, rgb_u8, format="png")
+    buf.seek(0)
     return buf.getvalue()
 
 
@@ -386,7 +395,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
         is_authenticated = "user" in session
         if not app.config["APP_SETTINGS"]["initialized"]:
-            return render_template("setup.html")
+            return redirect(url_for("setup"))
         raw_dirs = get_raw_data_dirs()
         default_raw_dir = raw_dirs[0]
         raw_tif_paths = get_scanned_raw_tif_paths()

@@ -63,7 +63,11 @@ def task_run_eval(kwargs: dict[str, Any]) -> dict[str, Any]:
     kwargs["summary_csv"] = Path(kwargs["summary_csv"])
     kwargs["output_csv"] = Path(kwargs["output_csv"])
     kwargs["best_json"] = Path(kwargs["best_json"])
-    return run_evaluation(**kwargs)
+
+    try:
+        return run_evaluation(**kwargs)
+    except SystemExit as e:
+        return {"error": str(e)}
 
 
 def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:

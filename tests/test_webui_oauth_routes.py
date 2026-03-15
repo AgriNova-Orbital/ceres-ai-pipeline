@@ -116,6 +116,5 @@ def test_protected_routes_redirect_to_login(client):
 
 def test_home_landing_page_is_accessible_when_logged_out(client):
     resp = client.get("/")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Initialization" in body or "Login with Google" in body
+    assert resp.status_code == 302
+    assert "/setup" in resp.headers["Location"]

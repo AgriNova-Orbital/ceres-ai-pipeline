@@ -172,6 +172,9 @@ def test_downloader_preview_runs_dry_run_command(
     mock_job.id = "job-1"
     mock_queue.enqueue.return_value = mock_job
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)

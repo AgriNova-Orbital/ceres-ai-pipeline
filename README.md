@@ -95,6 +95,8 @@ Deployment and operations references:
 The following items are planned to expand coverage, robustness, and operational capability.
 
 ### Data Source Expansion
+- **Single-file GEE exports**: Refactor GEE export pipeline to output single multi-band temporal stacks instead of many individual files, reducing IO/Drive limits.
+- **Timestamp-based NPZ building**: Update `build_npz_dataset_from_geotiffs.py` to parse explicit time metadata embedded inside single multi-band TIFFs instead of relying on file names/indices.
 - **Landsat integration**: Ingest Landsat-8/9 Surface Reflectance (SR) via GEE STAC alongside Sentinel-2 for higher revisit rate and sensor fusion.
 - **Multi-sensor fusion strategy**: Define harmonized band mapping (Sentinel-2 vs Landsat) and normalization to a common grid.
 - **Multi-year history (4-5 years)**: Expand the weekly raster archive from 1-year to 4-5 years of continuous coverage to improve temporal robustness.

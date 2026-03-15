@@ -24,9 +24,8 @@ def client(app):
 
 def test_home_shows_setup_screen_when_not_initialized(client):
     resp = client.get("/")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Checks" in body
+    assert resp.status_code == 302
+    assert "/setup" in resp.headers["Location"]
 
 
 def test_login_redirects_to_setup_when_not_initialized(client):

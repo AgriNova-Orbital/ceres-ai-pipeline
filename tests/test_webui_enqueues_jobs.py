@@ -35,6 +35,9 @@ def test_downloader_enqueues_job_instead_of_running(monkeypatch, tmp_path: Path)
     # This is tricky, we need to patch the get_queue function
     # Let's define it inside the webui module first
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
@@ -53,6 +56,9 @@ def test_webui_enqueues_service_tasks_instead_of_run_script(
 
     mock_queue = MagicMock()
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
@@ -140,6 +146,9 @@ def test_downloader_enqueue_includes_user_oauth_token(monkeypatch, tmp_path: Pat
     mock_job.id = "job-1"
     mock_queue.enqueue.return_value = mock_job
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
@@ -161,6 +170,9 @@ def test_enqueued_jobs_include_local_user_id(monkeypatch, tmp_path: Path):
     mock_job.id = "job-1"
     mock_queue.enqueue.return_value = mock_job
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
@@ -183,6 +195,9 @@ def test_downloader_custom_raw_dir_overrides_scanned_selection(
     mock_job.id = "job-1"
     mock_queue.enqueue.return_value = mock_job
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
@@ -212,6 +227,9 @@ def test_downloader_preview_export_passes_oauth_env_to_run_script(
     mock_job.id = "job-1"
     mock_queue.enqueue.return_value = mock_job
     monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: mock_redis)
 
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
