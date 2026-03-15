@@ -61,6 +61,9 @@ def _make_redis_conn(*, decode_responses: bool) -> Redis:
             )
         except ImportError:
             pass
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url:
+        return Redis.from_url(redis_url, decode_responses=decode_responses)
     return Redis(decode_responses=decode_responses)
 
 
@@ -420,19 +423,53 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.get("/api/jobs")
     def jobs_json() -> Response:
         try:
+            from rq.job import Job
+
             queue = get_queue_conn()
-            jobs = queue.jobs
-            rows = []
-            for j in jobs:
+            seen: set[str] = set()
+            rows: list[dict[str, str]] = []
+
+            def _append_job(j: Job) -> None:
+                jid = str(getattr(j, "id", ""))
+                if jid in seen:
+                    return
+                seen.add(jid)
                 rows.append(
                     {
-                        "id": str(getattr(j, "id", "")),
-                        "action": j.func_name,
+                        "id": jid,
+                        "action": getattr(j, "func_name", "") or getattr(j, "description", ""),
                         "status": j.get_status() or "unknown",
                         "started_at": str(j.started_at) if j.started_at else "",
                         "ended_at": str(j.ended_at) if j.ended_at else "",
                     }
                 )
+
+            # Jobs still waiting in the queue
+            for j in queue.jobs:
+                _append_job(j)
+
+            # Jobs currently being executed by workers
+            conn = queue.connection
+            for jid in queue.started_job_registry.get_job_ids():
+                try:
+                    _append_job(Job.fetch(jid, connection=conn))
+                except Exception:
+                    pass
+
+            # Recently finished jobs
+            for jid in queue.finished_job_registry.get_job_ids():
+                try:
+                    _append_job(Job.fetch(jid, connection=conn))
+                except Exception:
+                    pass
+
+            # Failed jobs
+            for jid in queue.failed_job_registry.get_job_ids():
+                try:
+                    _append_job(Job.fetch(jid, connection=conn))
+                except Exception:
+                    pass
+
             return jsonify(rows)
         except Exception as e:
             return jsonify([{"error": str(e)}])
