@@ -30,7 +30,7 @@ def _parse_int_csv(name: str, value: str) -> list[int]:
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run NDVI-forecast staged training matrix")
+    p = argparse.ArgumentParser(description="Run wheat-risk staged training matrix")
     p.add_argument(
         "--levels", default="1,2,4", help="Outer-loop level splits (comma-separated)"
     )
@@ -79,12 +79,13 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--train-script",
         type=Path,
-        default=Path("scripts/train_ndvi_forecast.py"),
+        default=Path("scripts/train_wheat_risk_lstm.py"),
         help="Training script path for execute-train mode.",
     )
     p.add_argument("--epochs", type=int, default=3)
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--max-invalid-ratio", type=float, default=0.5)
     p.add_argument("--embed-dim", type=int, default=64)
     p.add_argument("--hidden-dim", type=int, default=128)
     p.add_argument("--num-workers", type=int, default=0)
@@ -103,6 +104,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--batch-size must be > 0")
     if args.lr <= 0:
         raise SystemExit("--lr must be > 0")
+    if args.max_invalid_ratio < 0.0 or args.max_invalid_ratio > 1.0:
+        raise SystemExit("--max-invalid-ratio must be between 0 and 1")
     if args.embed_dim <= 0:
         raise SystemExit("--embed-dim must be > 0")
     if args.hidden_dim <= 0:
