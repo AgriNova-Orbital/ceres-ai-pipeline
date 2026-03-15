@@ -430,6 +430,19 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             seen: set[str] = set()
             rows: list[dict[str, str]] = []
 
+            # Apply a hard cap per registry to avoid fetching an unbounded number
+            # of jobs on every poll. Allow an optional `limit` query parameter,
+            # but never exceed the hard cap.
+            max_jobs_per_registry = 100
+            try:
+                requested_limit = request.args.get("limit", type=int)
+            except Exception:
+                requested_limit = None
+            if requested_limit is None or requested_limit <= 0:
+                limit_per_registry = max_jobs_per_registry
+            else:
+                limit_per_registry = min(requested_limit, max_jobs_per_registry)
+
             def _append_job(j: Job) -> None:
                 jid = str(getattr(j, "id", ""))
                 if jid in seen:
@@ -448,26 +461,26 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 )
 
             # Jobs still waiting in the queue
-            for j in queue.jobs:
+            for j in queue.jobs[:limit_per_registry]:
                 _append_job(j)
 
             # Jobs currently being executed by workers
             conn = queue.connection
-            for jid in queue.started_job_registry.get_job_ids():
+            for jid in queue.started_job_registry.get_job_ids()[:limit_per_registry]:
                 try:
                     _append_job(Job.fetch(jid, connection=conn))
                 except NoSuchJobError:
                     pass
 
             # Recently finished jobs
-            for jid in queue.finished_job_registry.get_job_ids():
+            for jid in queue.finished_job_registry.get_job_ids()[:limit_per_registry]:
                 try:
                     _append_job(Job.fetch(jid, connection=conn))
                 except NoSuchJobError:
                     pass
 
             # Failed jobs
-            for jid in queue.failed_job_registry.get_job_ids():
+            for jid in queue.failed_job_registry.get_job_ids()[:limit_per_registry]:
                 try:
                     _append_job(Job.fetch(jid, connection=conn))
                 except NoSuchJobError:
