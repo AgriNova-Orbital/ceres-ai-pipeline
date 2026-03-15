@@ -1,5 +1,14 @@
 # Wheat Risk 2D Staged Training Design
 
+> **Historical Note (added post-PR #4 / PR #6):** This design document was written for
+> the original Risk classification model. Following the discovery of target leakage
+> (band 11 = 1 − NDVI in all France 2025 GeoTIFFs), the 2D staged training matrix has
+> been migrated to train the **NDVI regression model** (`train_ndvi_forecast.py`, MSE
+> loss) using datasets produced by `build_ndvi_forecast_dataset.py`. All references to
+> `train_wheat_risk_lstm.py` and `data/wheat_risk/staged/` in this document reflect the
+> original design and are superseded by the NDVI forecasting workflow described in
+> `docs/WHEAT_RISK_PIPELINE.md` sections 5, 7, and 8.
+
 ## Goal
 
 Design a deterministic training workflow with:

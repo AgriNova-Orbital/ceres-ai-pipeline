@@ -157,9 +157,38 @@ uv run scripts/inventory_wheat_dates.py \
 **Script**: `scripts/run_staged_training_matrix.py`
 
 ### Goal
-Generate and execute a strict nested-loop plan:
-- Outer loop: image granularity levels
+Generate and execute a strict nested-loop plan that trains the **NDVI regression model**
+(`CnnLstmRegressor`, MSE loss) across combinations of image granularity and sample size:
+- Outer loop: image granularity levels (patch size)
 - Inner loop: sample-size steps
+
+> **Note:** As of PR #4 and PR #6, the 2D matrix has been fully migrated from the
+> deprecated Risk classification model (`train_wheat_risk_lstm.py`, BCEWithLogitsLoss)
+> to the NDVI forecasting regression model (`train_ndvi_forecast.py`, MSELoss).
+> All dataset paths now point to `data/ndvi_forecast/L{level}/` instead of the old
+> `data/wheat_risk/staged/L{level}/`.
+
+Before running the matrix, build per-level NDVI forecasting datasets (see section 7):
+
+```bash
+# L1 (patch=64, step=32)
+uv run scripts/build_ndvi_forecast_dataset.py \
+  --input-dir data/raw/france_2025_weekly \
+  --output-dir data/ndvi_forecast/L1 \
+  --window-size 4 --patch-size 64 --step-size 32
+
+# L2 (patch=32, step=16)
+uv run scripts/build_ndvi_forecast_dataset.py \
+  --input-dir data/raw/france_2025_weekly \
+  --output-dir data/ndvi_forecast/L2 \
+  --window-size 4 --patch-size 32 --step-size 16
+
+# L4 (patch=16, step=8)
+uv run scripts/build_ndvi_forecast_dataset.py \
+  --input-dir data/raw/france_2025_weekly \
+  --output-dir data/ndvi_forecast/L4 \
+  --window-size 4 --patch-size 16 --step-size 8
+```
 
 ### Usage
 ```bash
@@ -168,47 +197,38 @@ uv run scripts/run_staged_training_matrix.py \
   --dry-run \
   --levels 1,2,4 \
   --steps 100,500,2000 \
-  --base-patch 64
+  --base-patch 64 \
+  --runs-dir runs/ndvi_staged
 
 # Plan artifacts mode (creates per-cell directories and summary CSV)
 uv run scripts/run_staged_training_matrix.py \
   --run \
   --levels 1,2,4 \
   --steps 100,500,2000 \
-  --base-patch 64
+  --base-patch 64 \
+  --runs-dir runs/ndvi_staged
 
-# Execute training per matrix cell (nested loop order)
+# Execute NDVI regression training with per-level datasets (recommended)
 uv run scripts/run_staged_training_matrix.py \
   --run \
   --execute-train \
   --levels 1,2,4 \
   --steps 100,500,2000 \
   --base-patch 64 \
-  --index-csv ./data/wheat_risk/stage1/index.csv \
-  --root-dir ./data/wheat_risk/stage1 \
-  --device cuda
-
-# Execute training with per-level datasets (recommended for true granularity sweep)
-uv run scripts/run_staged_training_matrix.py \
-  --run \
-  --execute-train \
-  --levels 1,2,4 \
-  --steps 100,500,2000 \
-  --base-patch 64 \
-  --index-csv-template ./data/wheat_risk/staged/L{level}/index.csv \
-  --root-dir-template ./data/wheat_risk/staged/L{level} \
+  --index-csv-template ./data/ndvi_forecast/L{level}/index.csv \
+  --runs-dir runs/ndvi_staged \
   --device cuda
 ```
 
 ### Expected Results
 - Nested order:
   - `L1-S100 -> L1-S500 -> L1-S2000 -> L2-S100 -> ... -> L4-S2000`
-- Artifacts in `runs/staged/`:
-  - `runs/staged/Lx/Sy/config.json`
-  - `runs/staged/Lx/Sy/train_subset.csv`
-  - `runs/staged/Lx/Sy/train.log`
-  - `runs/staged/Lx/Sy/model.pt`
-  - `runs/staged/summary.csv`
+- Artifacts in `runs/ndvi_staged/`:
+  - `runs/ndvi_staged/Lx/Sy/config.json`
+  - `runs/ndvi_staged/Lx/Sy/train_subset.csv`
+  - `runs/ndvi_staged/Lx/Sy/train.log`
+  - `runs/ndvi_staged/Lx/Sy/model.pt`
+  - `runs/ndvi_staged/summary.csv`
 
 ---
 
@@ -373,25 +393,34 @@ uv run scripts/verify_geotiff_band_complement.py --input-dir data/raw/france_202
 
 2. Confirm band complementarity (target leakage check)
    uv run scripts/verify_geotiff_band_complement.py --input-dir data/raw/france_2025_weekly
-   # If max_abs_diff ≤ 1.19e-07 → risk label is derived from NDVI → use step 3b
+   # If max_abs_diff ≤ 1.19e-07 → risk label is derived from NDVI → use step 3 (NDVI path)
 
-3a. [If independent risk labels are available]
-    Build NPZ dataset from GeoTIFFs with true risk labels:
-    uv run scripts/build_npz_dataset_from_geotiffs.py \
-        --input-dir data/raw/france_2025_weekly \
-        --output-dir data/wheat_risk/stage1 \
-        --patch-size 32 --step-size 16 --min-valid-ratio 0.05
+3. Build per-level NDVI forecasting datasets (leakage-free production path):
+   uv run scripts/build_ndvi_forecast_dataset.py \
+       --input-dir data/raw/france_2025_weekly \
+       --output-dir data/ndvi_forecast/L1 \
+       --window-size 4 --patch-size 64 --step-size 32
 
-3b. [Current production path — leakage-free]
-    Build NDVI forecasting dataset:
-    uv run scripts/build_ndvi_forecast_dataset.py \
-        --input-dir data/raw/france_2025_weekly \
-        --output-dir data/ndvi_forecast/window4 \
-        --window-size 4 --patch-size 32 --step-size 16
+   uv run scripts/build_ndvi_forecast_dataset.py \
+       --input-dir data/raw/france_2025_weekly \
+       --output-dir data/ndvi_forecast/L2 \
+       --window-size 4 --patch-size 32 --step-size 16
 
-4. Train on the NDVI forecasting dataset:
+   uv run scripts/build_ndvi_forecast_dataset.py \
+       --input-dir data/raw/france_2025_weekly \
+       --output-dir data/ndvi_forecast/L4 \
+       --window-size 4 --patch-size 16 --step-size 8
+
+4. Run the 2D staged training matrix (NDVI regression, MSE loss):
+   uv run scripts/run_staged_training_matrix.py \
+       --run --execute-train \
+       --levels 1,2,4 --steps 100,500,2000 --base-patch 64 \
+       --index-csv-template ./data/ndvi_forecast/L{level}/index.csv \
+       --runs-dir runs/ndvi_staged --device cuda
+
+   # Or train a single model directly:
    uv run scripts/train_ndvi_forecast.py \
-       --index-csv data/ndvi_forecast/window4/index.csv \
+       --index-csv data/ndvi_forecast/L2/index.csv \
        --epochs 20 --batch-size 16 --device cuda \
        --save-path runs/ndvi_forecast/model.pt
 ```
