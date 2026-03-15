@@ -423,6 +423,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.get("/api/jobs")
     def jobs_json() -> Response:
         try:
+            from rq.exceptions import NoSuchJobError
             from rq.job import Job
 
             queue = get_queue_conn()
@@ -434,10 +435,12 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 if jid in seen:
                     return
                 seen.add(jid)
+                func_name = getattr(j, "func_name", "")
+                action = func_name if func_name else getattr(j, "description", "")
                 rows.append(
                     {
                         "id": jid,
-                        "action": getattr(j, "func_name", "") or getattr(j, "description", ""),
+                        "action": action,
                         "status": j.get_status() or "unknown",
                         "started_at": str(j.started_at) if j.started_at else "",
                         "ended_at": str(j.ended_at) if j.ended_at else "",
@@ -453,21 +456,21 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             for jid in queue.started_job_registry.get_job_ids():
                 try:
                     _append_job(Job.fetch(jid, connection=conn))
-                except Exception:
+                except NoSuchJobError:
                     pass
 
             # Recently finished jobs
             for jid in queue.finished_job_registry.get_job_ids():
                 try:
                     _append_job(Job.fetch(jid, connection=conn))
-                except Exception:
+                except NoSuchJobError:
                     pass
 
             # Failed jobs
             for jid in queue.failed_job_registry.get_job_ids():
                 try:
                     _append_job(Job.fetch(jid, connection=conn))
-                except Exception:
+                except NoSuchJobError:
                     pass
 
             return jsonify(rows)

@@ -284,7 +284,7 @@ def test_api_jobs_includes_started_and_finished_jobs(monkeypatch, tmp_path: Path
 
     # Manually move the job to the finished registry to simulate completion
     job.set_status("finished")
-    q.finished_job_registry.add(job, ttl=-1)
+    q.finished_job_registry.add(job, ttl=3600)
     q.remove(job.id)
 
     resp = client.get("/api/jobs")
