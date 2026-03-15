@@ -269,8 +269,8 @@ def _write_gee_style_tif(path: Path, *, data: np.ndarray) -> None:
         dtype="float32",
         crs="EPSG:4326",
         transform=from_origin(0, 0, 1, 1),
-    # Deliberately no 'nodata' kwarg — results in nodata=None (equivalent to
-    # 'nodata=null' in GDAL/rasterio metadata), which is the GEE export convention.
+        # Deliberately no 'nodata' kwarg — results in nodata=None (equivalent to
+        # 'nodata=null' in GDAL/rasterio metadata), which is the GEE export convention.
     ) as ds:
         ds.write(data)
 
