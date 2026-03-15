@@ -17,6 +17,9 @@ import pytest
 rasterio = pytest.importorskip("rasterio")
 from rasterio.transform import from_origin
 
+# Float32 machine epsilon: 2^-23 ≈ 1.192e-07.
+_FLOAT32_EPS = 1.1920928955078125e-07
+
 
 def _write_tif(path: Path, *, data: np.ndarray) -> None:
     c, h, w = data.shape
@@ -147,8 +150,9 @@ def test_check_complement_default_band_b_is_last(tmp_path: Path) -> None:
     _write_tif(tif, data=data)
 
     mean_d, max_d = _check_complement(tif, band_a=1, band_b=None)
-    assert mean_d == pytest.approx(0.0, abs=1e-9)
-    assert max_d == pytest.approx(0.0, abs=1e-9)
+    # float32 round-trip through GeoTIFF may introduce at most 1 ULP.
+    assert mean_d <= _FLOAT32_EPS
+    assert max_d <= _FLOAT32_EPS
 
 
 # ---------------------------------------------------------------------------
@@ -230,8 +234,7 @@ def test_cli_output_within_float32_epsilon(tmp_path: Path) -> None:
 
     line = proc.stdout.strip()
     max_diff = float(line.split("max_abs_diff= ")[1])
-    FLOAT32_EPS = 1.1920928955078125e-07
-    assert max_diff <= 2 * FLOAT32_EPS, f"max_abs_diff={max_diff} exceeds 2*float32_eps"
+    assert max_diff <= 2 * _FLOAT32_EPS, f"max_abs_diff={max_diff} exceeds 2*float32_eps"
 
 
 def test_cli_custom_bands(tmp_path: Path) -> None:
