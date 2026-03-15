@@ -17,8 +17,7 @@ import pytest
 rasterio = pytest.importorskip("rasterio")
 from rasterio.transform import from_origin
 
-# Float32 machine epsilon: 2^-23 ≈ 1.192e-07.
-_FLOAT32_EPS = 1.1920928955078125e-07
+_FLOAT32_EPS = float(np.finfo(np.float32).eps)
 
 
 def _write_tif(path: Path, *, data: np.ndarray) -> None:

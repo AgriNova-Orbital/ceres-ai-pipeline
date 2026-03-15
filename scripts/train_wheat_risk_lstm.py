@@ -55,7 +55,17 @@ class TrainArgs:
 
 def _parse_args(argv: list[str] | None = None) -> TrainArgs:
     p = argparse.ArgumentParser(
-        description="Train CNN+LSTM wheat risk baseline (seq2seq)."
+        description=(
+            "Train CNN+LSTM wheat risk baseline (seq2seq).\n\n"
+            "⚠️  TARGET LEAKAGE WARNING\n"
+            "Statistical analysis of the France 2025 GeoTIFF dataset shows that\n"
+            "the risk band (band_last) equals 1 − NDVI (band_1) to within float32\n"
+            "precision for every valid pixel. Training on these labels teaches the\n"
+            "model the trivial identity 'risk = 1 − ndvi', not genuine predictive\n"
+            "signal. Use scripts/build_ndvi_forecast_dataset.py to build a\n"
+            "leakage-free NDVI time-series forecasting dataset instead."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--index-csv", type=Path, required=True, help="CSV with NPZ paths")
     p.add_argument(

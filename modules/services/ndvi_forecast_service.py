@@ -90,12 +90,16 @@ def _close_srcs(srcs: Sequence[Any | None]) -> None:
             pass
 
 
-def _build_pixel_mask(src: Any, feature_bands: Sequence[int], win: tuple) -> np.ndarray:
-    """Return a ``(1, H, W)`` float32 valid mask for *src* at *win*.
+def _build_mask_and_features(src: Any, feature_bands: Sequence[int], win: tuple) -> tuple[np.ndarray, np.ndarray]:
+    """Read feature bands and build a ``(1, H, W)`` float32 valid mask.
 
     Combines the raster nodata mask (``read_masks``) with a finite-value check
     so that both explicit ``nodata`` pixels and NaN-stored GEE invalids are
     handled correctly.
+
+    Returns:
+        ``(mask, feat)`` where *mask* is ``(1, H, W)`` float32 (1=valid, 0=invalid)
+        and *feat* is ``(C, H, W)`` float32 with the raw band values.
     """
     band_masks = src.read_masks(indexes=list(feature_bands), window=win)  # (C, H, W)
     valid_from_mask = (band_masks > 0).all(axis=0, keepdims=True)  # (1, H, W)
@@ -165,7 +169,7 @@ def build_forecast_patches(
             masks.append(None)
             ndvi_targets.append(np.float32(np.nan))
         else:
-            valid, feat = _build_pixel_mask(s, feature_bands, win)  # (1,H,W), (C,H,W)
+            valid, feat = _build_mask_and_features(s, feature_bands, win)  # (1,H,W), (C,H,W)
             feat_filled = np.where(valid > 0, feat, np.float32(0.0))
             feats.append(feat_filled)
             masks.append(valid)

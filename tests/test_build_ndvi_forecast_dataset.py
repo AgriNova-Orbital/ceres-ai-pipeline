@@ -53,7 +53,7 @@ def _make_week_tifs(
     n_weeks: int,
     h: int = 8,
     w: int = 8,
-    n_bands: int = 11,  # 10 feature bands + 1 risk band (band 11)
+    n_bands: int = 11,  # 10 feature bands + 1 risk band (last band)
     ndvi_value: float = 0.5,
     risk_value: float = 0.5,
     nan_mask: np.ndarray | None = None,
