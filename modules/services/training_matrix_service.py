@@ -196,8 +196,6 @@ def run_matrix(
                 str(batch_size),
                 "--lr",
                 str(lr),
-                "--max-invalid-ratio",
-                "0.5",  # Hardcoded default
                 "--embed-dim",
                 str(embed_dim),
                 "--hidden-dim",
