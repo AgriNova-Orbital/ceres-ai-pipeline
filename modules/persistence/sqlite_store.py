@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -45,6 +46,17 @@ class SQLiteStore:
                     display_name TEXT,
                     created_at TEXT NOT NULL,
                     last_login_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_oauth_tokens (
+                    user_id TEXT PRIMARY KEY,
+                    token_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
                 )
                 """
             )
@@ -150,3 +162,45 @@ class SQLiteStore:
         if created is None:
             raise RuntimeError("user missing after insert")
         return created
+
+    def save_user_oauth_token(self, *, user_id: str, token: dict[str, Any]) -> None:
+        self.ensure_schema()
+        payload = json.dumps(token, sort_keys=True)
+        now = _now_iso()
+        with self._connect() as conn:
+            cur = conn.execute(
+                "SELECT user_id FROM user_oauth_tokens WHERE user_id = ?", (user_id,)
+            )
+            if cur.fetchone() is None:
+                conn.execute(
+                    """
+                    INSERT INTO user_oauth_tokens (user_id, token_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (user_id, payload, now, now),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE user_oauth_tokens
+                    SET token_json = ?, updated_at = ?
+                    WHERE user_id = ?
+                    """,
+                    (payload, now, user_id),
+                )
+
+    def get_user_oauth_token(self, user_id: str) -> dict[str, Any] | None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT token_json FROM user_oauth_tokens WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        if row is None or not row["token_json"]:
+            return None
+        return json.loads(row["token_json"])
+
+    def delete_user_oauth_token(self, user_id: str) -> None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            conn.execute("DELETE FROM user_oauth_tokens WHERE user_id = ?", (user_id,))
