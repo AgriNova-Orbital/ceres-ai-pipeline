@@ -32,8 +32,12 @@ Each ``.npz`` file saved by this module contains:
 ``M``   ``(W, 1, H_p, W_p)`` float32
         Standalone validity mask (same data as the last channel of ``X``).
 
-The dataset is compatible with ``modules.wheat_risk.dataset.WheatRiskNpzSequenceDataset``
-when the caller sets ``in_channels = X.shape[1]``.
+The dataset is NOT directly compatible with
+``modules.wheat_risk.dataset.WheatRiskNpzSequenceDataset`` because ``y`` here
+is a scalar float32 (next-week mean NDVI — a regression target), while that
+dataset enforces ``y.ndim == 1`` and ``len(y) == X.shape[0]`` for sequence
+classification. A dedicated scalar-regression dataset/training script is
+required to consume this format.
 
 Usage
 -----
@@ -79,6 +83,7 @@ _WORKER_PATCH_SIZE: int = 32
 _WORKER_EXAMPLES_DIR: Path | None = None
 _WORKER_WINDOW_SIZE: int = 4
 _WORKER_MIN_VALID_RATIO: float = 0.05
+_WORKER_ENV: Any | None = None
 
 
 def _close_srcs(srcs: Sequence[Any | None]) -> None:
@@ -213,10 +218,16 @@ def build_forecast_patches(
 # ---------------------------------------------------------------------------
 
 def _cleanup_forecast_worker() -> None:
-    global _WORKER_SRCS
+    global _WORKER_SRCS, _WORKER_ENV
     if _WORKER_SRCS is not None:
         _close_srcs(_WORKER_SRCS)
         _WORKER_SRCS = None
+    if _WORKER_ENV is not None:
+        try:
+            _WORKER_ENV.__exit__(None, None, None)
+        except Exception:
+            pass
+        _WORKER_ENV = None
 
 
 def _init_forecast_worker(
@@ -231,9 +242,10 @@ def _init_forecast_worker(
 ) -> None:
     global _WORKER_SRCS, _WORKER_FEATURE_BANDS, _WORKER_NDVI_BAND
     global _WORKER_PATCH_SIZE, _WORKER_WINDOW_SIZE, _WORKER_EXAMPLES_DIR
-    global _WORKER_MIN_VALID_RATIO
+    global _WORKER_MIN_VALID_RATIO, _WORKER_ENV
 
-    rasterio.Env(GDAL_CACHEMAX=int(gdal_cache_mb)).__enter__()
+    _WORKER_ENV = rasterio.Env(GDAL_CACHEMAX=int(gdal_cache_mb))
+    _WORKER_ENV.__enter__()
     _WORKER_SRCS = [rasterio.open(p) if p is not None else None for p in src_paths]
     _WORKER_FEATURE_BANDS = [int(b) for b in feature_bands]
     _WORKER_NDVI_BAND = int(ndvi_band)
@@ -324,9 +336,11 @@ def run_ndvi_forecast_build(
     if not tifs:
         raise RuntimeError(f"No matching GeoTIFFs found in {input_dir}")
 
-    # Build sorted list of source paths (None = missing week).
-    padded_paths: list[Path | None] = [p for p, *_ in tifs]
-    num_weeks = len(padded_paths)
+    # Build sorted list of source paths from discovered GeoTIFFs.
+    # Note: unlike dataset_service.run_build, no week-gap padding is performed
+    # here; all discovered files are used as-is in sorted order.
+    src_paths: list[Path] = [p for p, *_ in tifs]
+    num_weeks = len(src_paths)
     if num_weeks <= window_size:
         raise RuntimeError(
             f"Not enough weeks ({num_weeks}) for window_size={window_size}: need > {window_size}"
@@ -334,19 +348,15 @@ def run_ndvi_forecast_build(
 
     print(f"NDVI forecast build: {num_weeks} weeks, window={window_size}, producing up to {num_weeks - window_size} targets/spatial-patch")
 
-    srcs: list[Any | None] = []
+    srcs: list[Any] = []
     try:
-        for p in padded_paths:
-            srcs.append(rasterio.open(p) if p is not None else None)
-        first = next((s for s in srcs if s is not None), None)
-        if first is None:
-            raise RuntimeError("All weeks are missing; nothing to build")
+        for p in src_paths:
+            srcs.append(rasterio.open(p))
+        first = srcs[0]
 
         h, w = first.height, first.width
         band_count = first.count
         for s in srcs:
-            if s is None:
-                continue
             if s.height != h or s.width != w or s.count != band_count:
                 raise RuntimeError("GeoTIFFs must have the same height/width/band-count")
 
@@ -395,13 +405,13 @@ def run_ndvi_forecast_build(
                 )
                 all_npz_rels.extend(saved)
         else:
-            src_paths = [str(p) if p is not None else None for p in padded_paths]
+            worker_src_paths = [str(p) for p in src_paths]
             chunk_size = max(1, len(coords) // max(1, resolved_workers * 8))
             with mp.Pool(
                 processes=resolved_workers,
                 initializer=_init_forecast_worker,
                 initargs=(
-                    src_paths,
+                    worker_src_paths,
                     feature_bands,
                     ndvi_band,
                     int(patch_size),

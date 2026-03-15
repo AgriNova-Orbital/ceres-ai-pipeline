@@ -332,9 +332,11 @@ uv run scripts/verify_geotiff_band_complement.py --input-dir data/raw/france_202
         --output-dir data/ndvi_forecast/window4 \
         --window-size 4 --patch-size 32 --step-size 16
 
-4. Train a model on the output of step 3b:
-   uv run scripts/train_wheat_risk_lstm.py \
-       --index-csv data/ndvi_forecast/window4/index.csv \
-       --root-dir  data/ndvi_forecast/window4 \
-       --epochs 10 --batch-size 16 --device cpu
+4. Train on the NDVI forecasting dataset:
+   NOTE: scripts/train_wheat_risk_lstm.py trains a SEQUENCE CLASSIFIER
+   (BCEWithLogitsLoss, y shape (T,)) and is NOT compatible with the scalar
+   NDVI regression target produced in step 3b. A dedicated regression
+   training script is needed for the NDVI forecasting task. The risk-
+   classification script can only be used when independent (non-leakage)
+   risk labels are available (step 3a).
 ```

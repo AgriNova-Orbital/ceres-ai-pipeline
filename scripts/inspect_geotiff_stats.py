@@ -112,14 +112,7 @@ def run_inspect(
     band_indices: Sequence[int] | None = None,
 ) -> None:
     """Inspect all GeoTIFFs in *input_dir*, sorted by filename."""
-    tifs = sorted(input_dir.glob("*.tif")) + sorted(input_dir.glob("*.tiff"))
-    # Deduplicate in case both extensions matched the same stem.
-    seen_paths: set[Path] = set()
-    files: list[Path] = []
-    for p in tifs:
-        if p not in seen_paths:
-            files.append(p)
-            seen_paths.add(p)
+    files = sorted(input_dir.glob("*.tif*"), key=lambda p: p.name)
 
     if not files:
         print(f"No GeoTIFF files found in {input_dir}")

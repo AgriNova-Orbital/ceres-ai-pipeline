@@ -76,13 +76,7 @@ def run_verify(
 
     Files are processed in sorted filename order. One line is printed per file.
     """
-    tifs = sorted(input_dir.glob("*.tif")) + sorted(input_dir.glob("*.tiff"))
-    seen: set[Path] = set()
-    files: list[Path] = []
-    for p in tifs:
-        if p not in seen:
-            files.append(p)
-            seen.add(p)
+    files = sorted(input_dir.glob("*.tif*"), key=lambda p: p.name)
 
     if not files:
         print(f"No GeoTIFF files found in {input_dir}")

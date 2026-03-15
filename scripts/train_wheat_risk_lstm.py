@@ -62,8 +62,12 @@ def _parse_args(argv: list[str] | None = None) -> TrainArgs:
             "the risk band (band_last) equals 1 − NDVI (band_1) to within float32\n"
             "precision for every valid pixel. Training on these labels teaches the\n"
             "model the trivial identity 'risk = 1 − ndvi', not genuine predictive\n"
-            "signal. Use scripts/build_ndvi_forecast_dataset.py to build a\n"
-            "leakage-free NDVI time-series forecasting dataset instead."
+            "signal.\n\n"
+            "This script expects y to be a (T,) sequence and trains with\n"
+            "BCEWithLogitsLoss (binary classification). It is NOT compatible with\n"
+            "the scalar-regression NDVI forecasting dataset produced by\n"
+            "scripts/build_ndvi_forecast_dataset.py. For leakage-free NDVI\n"
+            "forecasting, a dedicated regression training script is required."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -287,20 +291,22 @@ def main(argv: list[str] | None = None) -> int:
             if yb.dtype != torch.float32:
                 yb = yb.float()
 
-            # Sanitize before checking invalid ratio so that finite-but-imputed
-            # values (e.g. from the mask channel) are not penalised. After
-            # nan_to_num the ratio will be 0; the guard remains as a safety net.
-            xb = _sanitize_x_batch(
-                xb,
-                torch_module=torch,
-                abs_clip=float(args.feature_abs_clip),
-            )
+            # Measure the invalid-pixel ratio on the raw batch BEFORE sanitization
+            # so that --max-invalid-ratio accurately reflects how corrupt the input
+            # data is. After _sanitize_x_batch() replaces NaN/inf with 0, the ratio
+            # would always be 0 and the check would be meaningless.
             invalid_ratio = float(
                 (~torch.isfinite(xb)).float().mean().detach().cpu().item()
             )
             if invalid_ratio > float(args.max_invalid_ratio):
                 skipped_invalid_x += 1
                 continue
+
+            xb = _sanitize_x_batch(
+                xb,
+                torch_module=torch,
+                abs_clip=float(args.feature_abs_clip),
+            )
 
             logits = model(xb)
             if logits.shape != yb.shape:
