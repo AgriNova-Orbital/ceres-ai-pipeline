@@ -164,9 +164,8 @@ class SQLiteStore:
         return created
 
     def save_user_oauth_token(self, *, user_id: str, token: dict[str, Any]) -> None:
-        self.ensure_schema()
+        payload = json.dumps(token, sort_keys=True)
         now = _now_iso()
-        token_json = json.dumps(token)
         with self._connect() as conn:
             conn.execute(
                 """
@@ -176,11 +175,10 @@ class SQLiteStore:
                     token_json = excluded.token_json,
                     updated_at = excluded.updated_at
                 """,
-                (user_id, token_json, now, now),
+                (user_id, payload, now, now),
             )
 
     def get_user_oauth_token(self, user_id: str) -> dict[str, Any] | None:
-        self.ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT token_json FROM user_oauth_tokens WHERE user_id = ?",
@@ -191,6 +189,5 @@ class SQLiteStore:
         return json.loads(row["token_json"])
 
     def delete_user_oauth_token(self, user_id: str) -> None:
-        self.ensure_schema()
         with self._connect() as conn:
             conn.execute("DELETE FROM user_oauth_tokens WHERE user_id = ?", (user_id,))
