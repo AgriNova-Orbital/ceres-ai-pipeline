@@ -80,7 +80,8 @@ def test_build_script_parallel_workers_mode(tmp_path: Path) -> None:
     assert len(rows) == 4
 
     sample = np.load(out / rows[0]["npz_path"], allow_pickle=False)
-    assert sample["X"].shape == (2, 2, 2, 2)
+    # 4x4 raster with patch=2 and step=2 => T=2, C_feat=2, +1 mask channel, H=W=2.
+    assert sample["X"].shape == (2, 3, 2, 2)
     assert sample["y"].shape == (2,)
 
 

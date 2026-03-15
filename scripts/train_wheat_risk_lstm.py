@@ -277,17 +277,20 @@ def main(argv: list[str] | None = None) -> int:
             if yb.dtype != torch.float32:
                 yb = yb.float()
 
+            # Sanitize before checking invalid ratio so that finite-but-imputed
+            # values (e.g. from the mask channel) are not penalised. After
+            # nan_to_num the ratio will be 0; the guard remains as a safety net.
+            xb = _sanitize_x_batch(
+                xb,
+                torch_module=torch,
+                abs_clip=float(args.feature_abs_clip),
+            )
             invalid_ratio = float(
                 (~torch.isfinite(xb)).float().mean().detach().cpu().item()
             )
             if invalid_ratio > float(args.max_invalid_ratio):
                 skipped_invalid_x += 1
                 continue
-            xb = _sanitize_x_batch(
-                xb,
-                torch_module=torch,
-                abs_clip=float(args.feature_abs_clip),
-            )
 
             logits = model(xb)
             if logits.shape != yb.shape:

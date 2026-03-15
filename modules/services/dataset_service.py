@@ -32,6 +32,7 @@ _WORKER_RISK_BAND: int | None = None
 _WORKER_PATCH_SIZE: int | None = None
 _WORKER_EXAMPLES_DIR: Path | None = None
 _WORKER_ENV: Any | None = None
+_WORKER_MIN_VALID_RATIO: float = 0.05
 
 def fill_missing_weeks(
     items: Sequence[tuple[int, object]], *, expected_len: int
@@ -202,8 +203,10 @@ def _build_patch_and_save(
     feature_bands: Sequence[int],
     risk_band: int,
     examples_dir: Path,
+    min_valid_ratio: float = 0.05,
 ) -> str | None:
     x_seq: list[np.ndarray] = []
+    m_seq: list[np.ndarray] = []
     y_seq: list[np.float32] = []
 
     ps = int(patch_size)
@@ -211,24 +214,46 @@ def _build_patch_and_save(
     for s in srcs:
         if s is None:
             x_seq.append(np.zeros((len(feature_bands), ps, ps), dtype=np.float32))
+            m_seq.append(np.zeros((1, ps, ps), dtype=np.float32))
             y_seq.append(np.float32(np.nan))
             continue
 
         feat = s.read(indexes=feature_bands, window=win).astype(np.float32, copy=False)
+
+        # Build a per-pixel valid mask combining the raster nodata mask and
+        # finite-value check. read_masks() returns 255 for valid pixels and 0
+        # for nodata/masked pixels; np.isfinite guards against NaN/inf values
+        # that were stored without an explicit nodata marker.
+        band_masks = s.read_masks(indexes=feature_bands, window=win)  # (C, H, W) uint8
+        valid_from_mask = (band_masks > 0).all(axis=0, keepdims=True)  # (1, H, W)
+        valid_from_finite = np.isfinite(feat).all(axis=0, keepdims=True)  # (1, H, W)
+        valid = (valid_from_mask & valid_from_finite).astype(np.float32)  # (1, H, W)
+
+        # Impute invalid pixels to 0 so X is always finite; the mask channel
+        # tells the model which positions are real observations.
+        feat = np.where(valid > 0, feat, np.float32(0.0))
+
         x_seq.append(feat)
+        m_seq.append(valid)
 
         risk = s.read(indexes=risk_band, window=win).astype(np.float32, copy=False)
-        y_seq.append(_safe_nanmean(risk))
+        risk_mask_band = s.read_masks(indexes=risk_band, window=win) > 0  # (H, W)
+        risk_finite = np.isfinite(risk) & risk_mask_band
+        y_val = np.float32(risk[risk_finite].mean()) if risk_finite.any() else np.float32(np.nan)
+        y_seq.append(y_val)
 
-    X = np.stack(x_seq, axis=0)
+    X_feat = np.stack(x_seq, axis=0)       # (T, C, H, W)
+    M = np.stack(m_seq, axis=0)            # (T, 1, H, W)
+    X = np.concatenate([X_feat, M], axis=1)  # (T, C+1, H, W) – mask appended as last channel
     y = np.asarray(y_seq, dtype=np.float32)
 
-    if np.isnan(X).mean() > 0.5:
+    mean_valid_ratio = float(M.mean())
+    if mean_valid_ratio < float(min_valid_ratio):
         return None
 
     npz_name = f"patch_r{row:05d}_c{col:05d}.npz"
     npz_rel = f"examples/{npz_name}"
-    np.savez_compressed(examples_dir / npz_name, X=X, y=y)
+    np.savez_compressed(examples_dir / npz_name, X=X, y=y, M=M)
     return npz_rel
 
 def _cleanup_worker_srcs() -> None:
@@ -251,6 +276,7 @@ def _init_patch_worker(
     patch_size: int,
     examples_dir: str,
     gdal_cache_mb: int,
+    min_valid_ratio: float,
 ) -> None:
     global _WORKER_ENV
     global _WORKER_SRCS
@@ -258,6 +284,7 @@ def _init_patch_worker(
     global _WORKER_RISK_BAND
     global _WORKER_PATCH_SIZE
     global _WORKER_EXAMPLES_DIR
+    global _WORKER_MIN_VALID_RATIO
 
     _WORKER_ENV = rasterio.Env(GDAL_CACHEMAX=int(gdal_cache_mb))
     _WORKER_ENV.__enter__()
@@ -266,6 +293,7 @@ def _init_patch_worker(
     _WORKER_RISK_BAND = int(risk_band)
     _WORKER_PATCH_SIZE = int(patch_size)
     _WORKER_EXAMPLES_DIR = Path(examples_dir)
+    _WORKER_MIN_VALID_RATIO = float(min_valid_ratio)
 
     atexit.register(_cleanup_worker_srcs)
 
@@ -288,6 +316,7 @@ def _build_patch_worker(coord: tuple[int, int]) -> str | None:
         feature_bands=_WORKER_FEATURE_BANDS,
         risk_band=_WORKER_RISK_BAND,
         examples_dir=_WORKER_EXAMPLES_DIR,
+        min_valid_ratio=_WORKER_MIN_VALID_RATIO,
     )
 
 def run_build(
@@ -305,6 +334,7 @@ def run_build(
     max_patches: int | None = None,
     seed: int = 42,
     skip_existing: bool = False,
+    min_valid_ratio: float = 0.05,
 ) -> None:
     index_csv = output_dir / "index.csv"
     examples_dir = output_dir / "examples"
@@ -498,6 +528,7 @@ def run_build(
                     feature_bands=feature_bands,
                     risk_band=risk_band,
                     examples_dir=examples_dir,
+                    min_valid_ratio=float(min_valid_ratio),
                 )
                 if npz_rel is not None:
                     index_rows.append({"npz_path": npz_rel})
@@ -514,6 +545,7 @@ def run_build(
                     int(patch_size),
                     str(examples_dir),
                     int(gdal_cache_mb),
+                    float(min_valid_ratio),
                 ),
             ) as pool:
                 iterator = pool.imap_unordered(

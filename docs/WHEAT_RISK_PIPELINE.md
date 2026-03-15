@@ -42,8 +42,26 @@ The `--output-dir` will contain:
   ```
 - `examples/`: A subdirectory containing individual `.npz` files.
   - Each `.npz` file contains:
-    - `X`: Shape `(Time, Channels, Height, Width)` - The feature data.
-    - `y`: Shape `(Time,)` - The risk labels.
+    - `X`: Shape `(Time, Channels+1, Height, Width)` – Feature data **with a mask channel appended as the last channel**. The mask channel is `1.0` where pixels are valid and `0.0` where they were masked/nodata. Feature pixels that were invalid are imputed to `0.0` so `X` is always fully finite.
+    - `y`: Shape `(Time,)` – Risk labels (float32, mean risk over valid pixels per patch per week; `NaN` when no valid target pixels exist for that time step).
+    - `M`: Shape `(Time, 1, Height, Width)` – Standalone validity mask (same data as the last channel of `X`, saved separately for convenience).
+
+#### Mask handling and valid-ratio threshold
+
+GeoTIFF inputs with nodata values or NaN pixels are handled robustly:
+
+- Per-pixel validity is determined by combining rasterio's raster mask (`read_masks`) with a finite-value check.  
+- Invalid pixels in feature bands are imputed to `0.0`; a mask channel (`M`) is appended to `X` so the model can distinguish real observations from fill values.  
+- A patch is kept if its **mean valid ratio** (fraction of valid pixels across all time steps) is at or above `--min-valid-ratio` (default `0.05`). Patches below this threshold are discarded.
+
+To tune the threshold:
+```bash
+# Keep patches with at least 10% valid pixels (stricter)
+uv run scripts/build_npz_dataset_from_geotiffs.py ... --min-valid-ratio 0.10
+
+# Keep nearly all patches (very lenient, useful for highly masked data)
+uv run scripts/build_npz_dataset_from_geotiffs.py ... --min-valid-ratio 0.01
+```
 
 ---
 
