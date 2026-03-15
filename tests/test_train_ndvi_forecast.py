@@ -20,32 +20,32 @@ torch = pytest.importorskip("torch")
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_ndvi_npz(out_dir: Path, name: str, *, W: int, C: int, H: int, W_: int, y_val: float = 0.5):
+def _make_ndvi_npz(out_dir: Path, name: str, *, W: int, C: int, H: int, width: int, y_val: float = 0.5):
     """Write one NDVI-forecast-format NPZ file."""
-    X = np.random.rand(W, C, H, W_).astype(np.float32)
-    M = np.ones((W, 1, H, W_), dtype=np.float32)
-    X_full = np.concatenate([X, M], axis=1)  # (W, C+1, H, W_)
+    X = np.random.rand(W, C, H, width).astype(np.float32)
+    M = np.ones((W, 1, H, width), dtype=np.float32)
+    X_full = np.concatenate([X, M], axis=1)  # (W, C+1, H, width)
     y = np.float32(y_val)
     np.savez_compressed(out_dir / name, X=X_full, y=y, M=M)
     return name
 
 
-def _make_dataset(tmp_path: Path, n: int = 5, *, W: int = 4, C: int = 10, H: int = 8, W_: int = 8):
+def _make_dataset(tmp_path: Path, n: int = 5, *, W: int = 4, C: int = 10, H: int = 8, width: int = 8):
     """Create a minimal NDVI forecast dataset directory."""
     examples = tmp_path / "examples"
     examples.mkdir()
     names = []
     for i in range(n):
         name = f"patch_{i:03d}.npz"
-        _make_ndvi_npz(examples, name, W=W, C=C, H=H, W_=W_, y_val=0.3 + 0.1 * i)
+        _make_ndvi_npz(examples, name, W=W, C=C, H=H, width=width, y_val=0.3 + 0.1 * i)
         names.append(f"examples/{name}")
 
     index_csv = tmp_path / "index.csv"
     with index_csv.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["npz_path"])
         w.writeheader()
-        for n_ in names:
-            w.writerow({"npz_path": n_})
+        for npz_name in names:
+            w.writerow({"npz_path": npz_name})
 
     return index_csv
 
@@ -65,7 +65,7 @@ class TestNdviForecastDataset:
     def test_x_shape(self, tmp_path):
         from modules.wheat_risk.dataset import NdviForecastDataset
 
-        _make_dataset(tmp_path, n=1, W=4, C=10, H=8, W_=8)
+        _make_dataset(tmp_path, n=1, W=4, C=10, H=8, width=8)
         ds = NdviForecastDataset(index_csv=tmp_path / "index.csv")
         x, y = ds[0]
         assert x.ndim == 4
@@ -84,7 +84,7 @@ class TestNdviForecastDataset:
 
         examples = tmp_path / "examples"
         examples.mkdir()
-        _make_ndvi_npz(examples, "p.npz", W=4, C=10, H=8, W_=8, y_val=0.42)
+        _make_ndvi_npz(examples, "p.npz", W=4, C=10, H=8, width=8, y_val=0.42)
         index_csv = tmp_path / "index.csv"
         with index_csv.open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=["npz_path"])
@@ -100,7 +100,7 @@ class TestNdviForecastDataset:
 
         examples = tmp_path / "examples"
         examples.mkdir()
-        _make_ndvi_npz(examples, "p.npz", W=4, C=10, H=8, W_=8, y_val=float("nan"))
+        _make_ndvi_npz(examples, "p.npz", W=4, C=10, H=8, width=8, y_val=float("nan"))
         index_csv = tmp_path / "index.csv"
         with index_csv.open("w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=["npz_path"])
@@ -179,7 +179,7 @@ class TestTrainNdviForecastCLI:
         assert "NDVI" in result.stdout
 
     def test_end_to_end(self, tmp_path):
-        index_csv = _make_dataset(tmp_path, n=8, W=4, C=10, H=8, W_=8)
+        index_csv = _make_dataset(tmp_path, n=8, W=4, C=10, H=8, width=8)
         save_path = tmp_path / "model.pt"
         result = subprocess.run(
             [
@@ -203,7 +203,7 @@ class TestTrainNdviForecastCLI:
         assert "epoch 2/2" in result.stdout
 
     def test_load_and_continue(self, tmp_path):
-        index_csv = _make_dataset(tmp_path, n=8, W=4, C=10, H=8, W_=8)
+        index_csv = _make_dataset(tmp_path, n=8, W=4, C=10, H=8, width=8)
         save_path = tmp_path / "model.pt"
 
         # First run: train and save
