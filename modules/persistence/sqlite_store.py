@@ -188,7 +188,11 @@ class SQLiteStore:
             ).fetchone()
         if row is None:
             return None
-        return json.loads(row["token_json"])
+        try:
+            return json.loads(row["token_json"])
+        except json.JSONDecodeError:
+            # Consider adding a log entry here to alert developers of data corruption
+            return None
 
     def delete_user_oauth_token(self, user_id: str) -> None:
         self.ensure_schema()
