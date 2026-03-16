@@ -122,18 +122,26 @@ def download_file(
     file_id: str,
     dst_path: Path,
     chunk_size: int = 1024 * 1024,
-) -> None:
+    progress_callback: Any | None = None,
+) -> int:
     googleapiclient, _ = _import_google()
 
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     request = service.files().get_media(fileId=file_id)
+    bytes_written = 0
     with dst_path.open("wb") as f:
         downloader = googleapiclient.http.MediaIoBaseDownload(
             f, request, chunksize=chunk_size
         )
         done = False
         while not done:
-            _, done = downloader.next_chunk()
+            status, done = downloader.next_chunk()
+            if status is not None and progress_callback is not None:
+                n = int(status.total_size * status.progress()) - bytes_written
+                if n > 0:
+                    bytes_written += n
+                    progress_callback(n)
+    return bytes_written
 
 
 def ensure_files_downloaded(
@@ -142,13 +150,26 @@ def ensure_files_downloaded(
     files: Iterable[DriveFile],
     out_dir: Path,
     skip_existing: bool = True,
+    progress: Any | None = None,
 ) -> list[Path]:
     out: list[Path] = []
     for f in files:
         p = out_dir / f.name
+        if progress is not None:
+            progress.on_file_start(f.name, f.size or 0)
         if skip_existing and p.exists():
+            if progress is not None:
+                progress.on_chunk(f.size or 0)
+                progress.on_file_done(f.name, f.size or 0)
             out.append(p)
             continue
-        download_file(service, file_id=f.id, dst_path=p)
+        download_file(
+            service,
+            file_id=f.id,
+            dst_path=p,
+            progress_callback=progress.on_chunk if progress is not None else None,
+        )
+        if progress is not None:
+            progress.on_file_done(f.name, f.size or 0)
         out.append(p)
     return out

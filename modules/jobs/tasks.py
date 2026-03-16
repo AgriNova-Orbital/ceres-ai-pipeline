@@ -80,3 +80,71 @@ def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
     kwargs["input_dir"] = Path(kwargs["input_dir"])
     kwargs["output_dir"] = Path(kwargs["output_dir"])
     return run_inventory(**kwargs)
+
+
+def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
+    from pathlib import Path
+
+    from modules.drive_oauth import (
+        download_file,
+        get_drive_service,
+        list_folder_files,
+    )
+    from modules.download_progress import (
+        DownloadProgress,
+        estimate_download_size,
+        bytes_to_human,
+    )
+    from modules.merge_geotiffs import merge_split_geotiffs, has_gdal
+
+    oauth_token = kwargs.pop("oauth_token", None)
+    folder_id = kwargs["folder_id"]
+    save_dir = Path(kwargs["save_dir"])
+
+    credentials_json = Path("credentials.json")
+    token_json = Path("token.json")
+
+    if oauth_token:
+        import json
+        import os
+
+        token_json = Path(os.environ.get("OAUTH_TOKEN_CACHE", "token.json"))
+        token_json.write_text(json.dumps(oauth_token), encoding="utf-8")
+
+    svc = get_drive_service(
+        credentials_json=credentials_json,
+        token_json=token_json,
+    )
+
+    all_files = list_folder_files(svc, folder_id=folder_id)
+    tif_files = [f for f in all_files if f.name.lower().endswith((".tif", ".tiff"))]
+    total_size = estimate_download_size([{"size": f.size or 0} for f in tif_files])
+
+    print(
+        f"Downloading {len(tif_files)} files ({bytes_to_human(total_size)}) to {save_dir}"
+    )
+
+    with DownloadProgress(total_bytes=total_size, total_files=len(tif_files)) as prog:
+        for f in tif_files:
+            dst = save_dir / f.name
+            if dst.exists() and dst.stat().st_size == (f.size or 0):
+                prog.on_chunk(f.size or 0)
+                prog.on_file_done(f.name, f.size or 0)
+                continue
+            prog.on_file_start(f.name, f.size or 0)
+            download_file(
+                svc,
+                file_id=f.id,
+                dst_path=dst,
+                progress_callback=prog.on_chunk,
+            )
+            prog.on_file_done(f.name, f.size or 0)
+
+    result = {"downloaded": len(tif_files), "total_size": total_size}
+
+    if has_gdal():
+        merged = merge_split_geotiffs(save_dir)
+        result["merged"] = len(merged)
+        print(f"Merged {len(merged)} split files")
+
+    return result

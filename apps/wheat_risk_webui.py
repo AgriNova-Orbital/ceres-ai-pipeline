@@ -31,6 +31,7 @@ from modules.google_user_oauth import (
     get_google_oauth_redirect_uri,
     get_google_web_client_config,
 )
+from modules.google_user_oauth import build_google_credentials_from_oauth_token
 from modules.persistence.sqlite_store import SQLiteStore
 
 
@@ -741,6 +742,138 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
         flash("Evaluation enqueued.", "success")
         return redirect(url_for("home"))
+
+    def _build_drive_service() -> Any:
+        google_token = session.get("google_token")
+        if not google_token:
+            return None
+        try:
+            import googleapiclient.discovery  # type: ignore
+
+            creds = build_google_credentials_from_oauth_token(google_token)
+            return googleapiclient.discovery.build("drive", "v3", credentials=creds)
+        except Exception:
+            return None
+
+    @app.get("/api/drive/list")
+    def drive_list() -> Response:
+        svc = _build_drive_service()
+        if svc is None:
+            return jsonify({"error": "Not authenticated with Drive"}), 401
+        folder_id = request.args.get("id", "root")
+        try:
+            q_folders = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false"
+            resp = (
+                svc.files()
+                .list(
+                    q=q_folders,
+                    fields="files(id, name, mimeType)",
+                    pageSize=100,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+            )
+            folders = [
+                {"id": f["id"], "name": f["name"], "type": "folder"}
+                for f in resp.get("files", [])
+            ]
+            q_files = f"'{folder_id}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed = false"
+            resp_files = (
+                svc.files()
+                .list(
+                    q=q_files,
+                    fields="files(id, name, mimeType, size)",
+                    pageSize=1000,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute()
+            )
+            files = []
+            for f in resp_files.get("files", []):
+                files.append(
+                    {
+                        "id": f["id"],
+                        "name": f["name"],
+                        "type": "file",
+                        "size": int(f["size"]) if "size" in f else None,
+                    }
+                )
+            return jsonify({"folder_id": folder_id, "folders": folders, "files": files})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.get("/api/drive/estimate")
+    def drive_estimate() -> Response:
+        svc = _build_drive_service()
+        if svc is None:
+            return jsonify({"error": "Not authenticated with Drive"}), 401
+        folder_id = request.args.get("folder_id", "")
+        if not folder_id:
+            return jsonify({"error": "folder_id required"}), 400
+        try:
+            from modules.drive_oauth import list_folder_files
+
+            all_files = list_folder_files(svc, folder_id=folder_id)
+            tif_files = [
+                f for f in all_files if f.name.lower().endswith((".tif", ".tiff"))
+            ]
+            total_size = sum(f.size or 0 for f in tif_files)
+            return jsonify(
+                {
+                    "folder_id": folder_id,
+                    "total_files": len(all_files),
+                    "tif_files": len(tif_files),
+                    "total_size": total_size,
+                    "total_size_human": _human_bytes(total_size),
+                }
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.post("/api/drive/download")
+    def drive_download() -> Response:
+        svc = _build_drive_service()
+        if svc is None:
+            return jsonify({"error": "Not authenticated with Drive"}), 401
+        folder_id = request.form.get("folder_id", "").strip()
+        save_dir = request.form.get("save_dir", "data/raw/drive_download").strip()
+        if not folder_id:
+            return jsonify({"error": "folder_id required"}), 400
+
+        queue = get_queue_conn()
+        job_kwargs = {
+            "folder_id": folder_id,
+            "save_dir": save_dir,
+            "oauth_token": session.get("google_token"),
+        }
+        job = queue.enqueue(
+            "modules.jobs.tasks.task_drive_download",
+            args=(job_kwargs,),
+            job_timeout="2h",
+            result_ttl="7d",
+            description=f"drive_download: {folder_id}",
+        )
+        rec = JobRecord(
+            id=job.id,
+            section="drive",
+            action="download",
+            command=["task_drive_download"],
+            status="enqueued",
+            enqueued_at=_now_iso(),
+        )
+        app.config["JOB_HISTORY"].insert(0, rec)
+        app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
+        flash(f"Drive download enqueued (job {job.id}).", "success")
+        return redirect(url_for("home"))
+
+    def _human_bytes(n: float) -> str:
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if abs(n) < 1024:
+                return f"{n:.2f} {unit}"
+            n /= 1024
+        return f"{n:.2f} PB"
 
     @app.get("/plots/evaluation.png")
     def evaluation_plot() -> Response:

@@ -31,6 +31,7 @@
 
   {% if is_authenticated %}
   <nav>
+    <a href="#drive-browser">Drive Browser</a>
     <a href="#downloader">Data Downloader</a>
     <a href="#acquisition">Data Acquisition</a>
     <a href="#build">Dataset Build</a>
@@ -48,6 +49,29 @@
       <p><a href="{{ url_for('login') }}">Login with Google</a></p>
     </section>
     {% else %}
+    <section id="drive-browser" class="card">
+      <h2>Google Drive Browser</h2>
+      <div id="drive-path" style="margin-bottom:8px;font-family:monospace;color:#888;">Root</div>
+      <div id="drive-list" style="max-height:400px;overflow-y:auto;border:1px solid #444;padding:8px;">
+        <div class="drive-item drive-folder" onclick="driveLoadFolder('root')">&#128193; Open Root</div>
+      </div>
+      <div id="drive-summary" style="display:none;margin-top:12px;padding:10px;background:#2a2a2a;border-radius:4px;">
+        <p>Selected folder: <code id="drive-sel-name">-</code></p>
+        <p>TIF files: <span id="drive-sel-tif">0</span> | Total size: <span id="drive-sel-size">0</span></p>
+        <form method="post" action="{{ url_for('drive_download') }}" style="display:inline;">
+          <input type="hidden" name="folder_id" id="drive-sel-id">
+          <label>Save to: <input name="save_dir" value="data/raw/drive_download" style="width:250px;"></label>
+          <button type="submit">Download Folder</button>
+        </form>
+      </div>
+      <style>
+        .drive-item { padding: 4px 8px; cursor: pointer; border-bottom: 1px solid #333; }
+        .drive-item:hover { background: #333; }
+        .drive-folder { color: #ffd700; }
+        .drive-file { color: #888; }
+      </style>
+    </section>
+
     <section id="downloader" class="card">
       <h2>Data Downloader</h2>
       <form method="post" action="{{ url_for('run_downloader') }}" class="grid">
@@ -190,6 +214,64 @@
 
   <script>
     {% if is_authenticated %}
+    let _driveStack = [{id: 'root', name: 'Root'}];
+
+    function driveLoadFolder(id) {
+      const listEl = document.getElementById('drive-list');
+      listEl.innerHTML = '<div style="color:#888;">Loading...</div>';
+      fetch('/api/drive/list?id=' + encodeURIComponent(id))
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) {
+            listEl.innerHTML = '<div style="color:red;">' + data.error + '</div>';
+            return;
+          }
+          let html = '';
+          if (id !== 'root') {
+            html += '<div class="drive-item drive-folder" onclick="driveGoBack()">&#128281; .. (back)</div>';
+          }
+          data.folders.forEach(f => {
+            html += '<div class="drive-item drive-folder" onclick="driveLoadFolder(\'' + f.id + '\')">&#128193; ' + f.name + '</div>';
+          });
+          data.files.forEach(f => {
+            const sz = f.size ? (f.size / (1024*1024)).toFixed(1) + ' MB' : '-';
+            html += '<div class="drive-file drive-item" onclick="driveSelectFolder(\'' + id + '\')">&#128196; ' + f.name + ' <small>(' + sz + ')</small></div>';
+          });
+          if (data.folders.length === 0 && data.files.length === 0) {
+            html += '<div style="color:#666;">Empty folder</div>';
+          }
+          listEl.innerHTML = html;
+          _driveStack.push({id: id, name: id});
+          document.getElementById('drive-path').textContent = _driveStack.map(s => s.name).join(' / ');
+        })
+        .catch(e => { listEl.innerHTML = '<div style="color:red;">Error: ' + e + '</div>'; });
+    }
+
+    function driveGoBack() {
+      if (_driveStack.length > 1) {
+        _driveStack.pop();
+        const prev = _driveStack[_driveStack.length - 1];
+        _driveStack.pop();
+        driveLoadFolder(prev.id);
+      }
+    }
+
+    function driveSelectFolder(folderId) {
+      document.getElementById('drive-sel-id').value = folderId;
+      document.getElementById('drive-sel-name').textContent = folderId;
+      document.getElementById('drive-summary').style.display = 'block';
+      fetch('/api/drive/estimate?folder_id=' + encodeURIComponent(folderId))
+        .then(r => r.json())
+        .then(data => {
+          if (!data.error) {
+            document.getElementById('drive-sel-tif').textContent = data.tif_files;
+            document.getElementById('drive-sel-size').textContent = data.total_size_human;
+          }
+        });
+    }
+
+    driveLoadFolder('root');
+
     function setRawPreview() {
       const customPath = document.getElementById('raw_path_custom').value.trim();
       const selectedPath = document.getElementById('raw_path_select').value;

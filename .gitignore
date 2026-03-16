@@ -223,6 +223,3 @@ __marimo__/
 *.jpg
 *.jpeg
 .worktrees/
-docs/plans/
-tests/test_start_local_dev_script.py
-
