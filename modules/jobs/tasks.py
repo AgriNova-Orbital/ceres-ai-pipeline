@@ -4,6 +4,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from modules.download_progress import (
+    DownloadProgress,
+    bytes_to_human,
+    estimate_download_size,
+)
+from modules.drive_oauth import download_file, get_drive_service, list_folder_files
+from modules.merge_geotiffs import ingest_downloaded_geotiffs
+
 
 def run_script(
     cmd: list[str],
@@ -83,20 +91,6 @@ def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
-    from pathlib import Path
-
-    from modules.drive_oauth import (
-        download_file,
-        get_drive_service,
-        list_folder_files,
-    )
-    from modules.download_progress import (
-        DownloadProgress,
-        estimate_download_size,
-        bytes_to_human,
-    )
-    from modules.merge_geotiffs import merge_split_geotiffs, has_gdal
-
     oauth_token = kwargs.pop("oauth_token", None)
     folder_id = kwargs["folder_id"]
     save_dir = Path(kwargs["save_dir"])
@@ -120,6 +114,8 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     tif_files = [f for f in all_files if f.name.lower().endswith((".tif", ".tiff"))]
     total_size = estimate_download_size([{"size": f.size or 0} for f in tif_files])
 
+    save_dir.mkdir(parents=True, exist_ok=True)
+
     print(
         f"Downloading {len(tif_files)} files ({bytes_to_human(total_size)}) to {save_dir}"
     )
@@ -140,11 +136,19 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
             )
             prog.on_file_done(f.name, f.size or 0)
 
-    result = {"downloaded": len(tif_files), "total_size": total_size}
+    result: dict[str, Any] = {"downloaded": len(tif_files), "total_size": total_size}
 
-    if has_gdal():
-        merged = merge_split_geotiffs(save_dir)
-        result["merged"] = len(merged)
-        print(f"Merged {len(merged)} split files")
+    try:
+        ingest_summary = ingest_downloaded_geotiffs(save_dir)
+    except ImportError as e:
+        ingest_summary = {
+            "merged_weeks": [],
+            "single_tile_weeks_normalized": [],
+            "failed_weeks": [],
+            "warnings": [str(e)],
+            "unknown_files": [],
+        }
+
+    result.update(ingest_summary)
 
     return result

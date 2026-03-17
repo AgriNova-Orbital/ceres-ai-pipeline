@@ -39,3 +39,11 @@ def test_parse_temporal_filename_supports_week_code() -> None:
     assert d == date.fromisocalendar(2025, 2, 1)
     assert idx == 2
     assert year == 2025
+
+
+def test_parse_temporal_filename_rejects_tile_suffixed_week_export() -> None:
+    from modules.services.dataset_service import _parse_temporal_filename
+
+    parsed = _parse_temporal_filename("fr_wheat_feat_2021W01-0000009984-0000000000.tif")
+
+    assert parsed is None

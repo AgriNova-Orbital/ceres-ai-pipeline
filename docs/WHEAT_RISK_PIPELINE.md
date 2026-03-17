@@ -1,18 +1,67 @@
 # Wheat Risk Pipeline Documentation 🌾
 
-This document details the scripts and modules used for the Wheat Risk analysis pipeline, focusing on dataset creation, management, and model training.
+This document details the scripts and modules used for the Wheat Risk analysis pipeline, focusing on Drive download ingest, dataset creation, management, and model training.
 
-## 1. Dataset Generation
+## 1. Drive Download & Canonical GeoTIFF Ingest
+**Script**: `scripts/download_drive_folder.py`
+
+### Goal
+Download weekly GeoTIFF exports from Google Drive and normalize them into the canonical raw raster contract used by downstream dataset tools.
+
+### Features
+- **Drive Download**: Downloads matching `.tif` / `.tiff` files with a progress bar.
+- **Shared Ingest Helper**: `--merge` runs `modules.merge_geotiffs.ingest_downloaded_geotiffs()`.
+- **Accepted Inputs**:
+  - canonical weekly rasters: `fr_wheat_feat_YYYYWww.tif`
+  - Earth Engine tile exports: `fr_wheat_feat_YYYYWww-<x>-<y>.tif`
+  - legacy `_data_` forms that still encode a week key
+- **Canonical Output**: Normalizes valid weekly inputs to `fr_wheat_feat_YYYYWww.tif`.
+- **Tile Archival**: After a successful multi-tile merge, original source tiles are moved into `_tiles/<week>/`.
+- **Structured Summary**: Reports `merged_weeks`, `single_tile_weeks_normalized`, `failed_weeks`, `warnings`, and `unknown_files`.
+
+### Validation Rules
+- Hard-fail on unreadable rasters, wrong canonical filename, band count other than 11, non-`float32` data, `nodata != -32768`, zero width/height, or missing CRS.
+- Warn when band descriptions are missing, partially missing, or present in an unexpected order.
+- Multi-tile merges write into a temporary path first and only rename into place after validation succeeds.
+
+### Usage
+```bash
+uv run scripts/download_drive_folder.py \
+  --folder "YOUR_DRIVE_FOLDER_ID" \
+  --save ./data/raw/france_2025_weekly \
+  --merge
+```
+
+### Expected Results
+- `./data/raw/france_2025_weekly/fr_wheat_feat_YYYYWww.tif` for each validated week
+- `./data/raw/france_2025_weekly/_tiles/<week>/...` for archived source tiles after successful merges
+- an ingest summary printed to stdout
+
+### Notes
+- Single-tile weekly exports can still be normalized without GDAL.
+- Multi-tile merges require GDAL; when GDAL is unavailable the ingest summary reports failures/warnings instead of silently pretending the merge succeeded.
+- Downstream dataset builders intentionally ignore tile-suffixed weekly exports. Normalize them first before training.
+
+---
+
+## 2. Dataset Generation
 **Script**: `scripts/build_npz_dataset_from_geotiffs.py`
 
 ### Goal
-Converts a series of weekly GeoTIFF images (exported from Google Earth Engine) into a machine-learning-ready dataset of temporal sequences. It extracts patches from the images and saves them as `.npz` files.
+Converts a directory of canonical weekly GeoTIFF images into a machine-learning-ready dataset of temporal sequences. It extracts patches from the images and saves them as `.npz` files.
 
 ### features
 - **Downloads Inputs**: Can optionally download GeoTIFFs directly from Google Drive.
 - **Temporal Alignment**: Aligns weekly images into a time-series (T, C, H, W).
 - **Patch Extraction**: Cuts large GeoTIFFs into smaller patches (e.g., 32x32 pixels) for training.
 - **Handling Missing Data**: Pads missing weeks with placeholder values so the time dimension remains consistent.
+
+### Input Contract
+- Preferred raw input names: `fr_wheat_feat_YYYYWww.tif`
+- Supported compatibility names: existing `fr_wheat_feat_YYYY_data_...` forms already used elsewhere in the repo
+- Not accepted as direct dataset inputs: Earth Engine tile-suffixed weekly exports like `fr_wheat_feat_2025W01-0000009984-0000000000.tif`
+
+If your Drive folder contains split weekly exports, normalize them first with `scripts/download_drive_folder.py --merge` (or the WebUI downloader job) before running dataset build.
 
 ### Usage
 ```bash
@@ -31,6 +80,8 @@ uv run scripts/build_npz_dataset_from_geotiffs.py \
   --drive-credentials-json client_secret.json
 ```
 
+Use the direct `--drive-folder-id` path when the Drive folder already contains canonical weekly rasters or legacy `_data_` inputs. For split Earth Engine tiles, run the dedicated downloader ingest step first.
+
 ### Expected Results
 The `--output-dir` will contain:
 - `index.csv`: A manifest file listing all generated samples.
@@ -47,7 +98,7 @@ The `--output-dir` will contain:
 
 ---
 
-## 2. Index Management
+## 3. Index Management
 **Script**: `scripts/rebuild_index.py`
 
 ### Goal
@@ -65,7 +116,7 @@ uv run scripts/rebuild_index.py ./data/dataset_output
 
 ---
 
-## 3. Model Training
+## 4. Model Training
 **Script**: `scripts/train_wheat_risk_lstm.py`
 
 ### Goal
@@ -87,7 +138,7 @@ uv run scripts/train_wheat_risk_lstm.py \
 
 ---
 
-## 4. Date Inventory & Missing-Date Report
+## 5. Date Inventory & Missing-Date Report
 **Script**: `scripts/inventory_wheat_dates.py`
 
 ### Goal
@@ -111,7 +162,7 @@ uv run scripts/inventory_wheat_dates.py \
 
 ---
 
-## 5. 2D Staged Training Matrix (Nested Loop)
+## 6. 2D Staged Training Matrix (Nested Loop)
 **Script**: `scripts/run_staged_training_matrix.py`
 
 ### Goal
@@ -170,7 +221,7 @@ uv run scripts/run_staged_training_matrix.py \
 
 ---
 
-## 6. Internal Utilities
+## 7. Internal Utilities
 **Module**: `modules/wheat_risk/data_cache.py`
 
 ### Goal

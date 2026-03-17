@@ -5,6 +5,10 @@ from typing import Any
 
 
 _PAT_WEEK = re.compile(r"^fr_wheat_feat_(\d{4})W(\d{2})\.tif(?:f)?$", re.IGNORECASE)
+_PAT_WEEK_TILE = re.compile(
+    r"^fr_wheat_feat_(\d{4})W(\d{2})-\d+-\d+\.tif(?:f)?$",
+    re.IGNORECASE,
+)
 _PAT_DATA = re.compile(r"^fr_wheat_feat_(\d{4})_data_(.+)\.tif(?:f)?$", re.IGNORECASE)
 _PAT_WEEK_IN_SUFFIX = re.compile(r"\bW(\d{2})\b", re.IGNORECASE)
 _PAT_NUM_IN_SUFFIX = re.compile(r"\b(\d{1,3})\b")
@@ -19,6 +23,10 @@ def _sort_key_for_name(name: str) -> tuple[int, int, str]:
     """
 
     m = _PAT_WEEK.match(name)
+    if m:
+        return int(m.group(1)), int(m.group(2)), name
+
+    m = _PAT_WEEK_TILE.match(name)
     if m:
         return int(m.group(1)), int(m.group(2)), name
 
@@ -47,7 +55,7 @@ def filter_weekly_geotiffs(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = str(f.get("name", ""))
         if not name.lower().endswith((".tif", ".tiff")):
             continue
-        if _PAT_WEEK.match(name) or _PAT_DATA.match(name):
+        if _PAT_WEEK.match(name) or _PAT_WEEK_TILE.match(name) or _PAT_DATA.match(name):
             out.append(f)
 
     # If files use numeric reverse suffix (001 newest), sort those by number DESC

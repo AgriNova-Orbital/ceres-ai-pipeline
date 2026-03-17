@@ -249,3 +249,21 @@ def test_downloader_preview_export_passes_oauth_env_to_run_script(
     _, kwargs = mock_queue.enqueue.call_args
     env_overrides = kwargs["kwargs"]["env_overrides"]
     assert "GOOGLE_OAUTH_TOKEN_JSON" in env_overrides
+
+
+def test_drive_download_job_result_shape_is_json_friendly() -> None:
+    sample = {
+        "downloaded": 1,
+        "total_size": 10,
+        "merged_weeks": [],
+        "single_tile_weeks_normalized": ["2021W01"],
+        "failed_weeks": [],
+        "warnings": [],
+        "unknown_files": [],
+    }
+
+    assert sample["single_tile_weeks_normalized"] == ["2021W01"]
+    assert isinstance(sample["merged_weeks"], list)
+    assert isinstance(sample["failed_weeks"], list)
+    assert isinstance(sample["warnings"], list)
+    assert isinstance(sample["unknown_files"], list)

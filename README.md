@@ -6,7 +6,7 @@ This project demonstrates a Python-based pipeline for predicting wheat rust risk
 
 ## 🌟 Features
 
-- **Data Downloader**: Fetch Sentinel-2 data via Earth Engine (STAC/Drive)
+- **Data Downloader**: Fetch Sentinel-2 data via Earth Engine (STAC/Drive) and normalize weekly Drive GeoTIFFs into canonical rasters
 - **Dataset Builder**: Parallel patch extraction and weekly cadence interpolation
 - **Staged Training Matrix**: Nested-loop execution for experimenting with image granularity and sample sizes
 - **Evaluation & Model Selection**: Automated threshold tuning for recall-first risk detection
@@ -117,6 +117,20 @@ The following items are planned to expand coverage, robustness, and operational 
 ### 🛠️ Operational CLI Usage
 
 For detailed documentation on the pipeline scripts (dataset creation, training, etc.), see [docs/WHEAT_RISK_PIPELINE.md](docs/WHEAT_RISK_PIPELINE.md).
+
+Weekly Drive downloads now support a canonical ingest step:
+- split Earth Engine exports like `fr_wheat_feat_YYYYWww-<x>-<y>.tif` can be merged or normalized into `fr_wheat_feat_YYYYWww.tif`
+- successful multi-tile merges archive original tiles under `_tiles/<week>/`
+- CLI and WebUI download flows report `merged_weeks`, `single_tile_weeks_normalized`, `failed_weeks`, `warnings`, and `unknown_files`
+
+Example:
+
+```bash
+uv run scripts/download_drive_folder.py \
+  --folder "YOUR_DRIVE_FOLDER_ID" \
+  --save ./data/raw/france_2025_weekly \
+  --merge
+```
 
 ### Expanding Source Time Range
 

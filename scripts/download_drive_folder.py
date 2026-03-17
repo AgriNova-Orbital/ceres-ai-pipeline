@@ -25,10 +25,31 @@ from modules.download_progress import (
     bytes_to_human,
     estimate_download_size,
 )
-from modules.merge_geotiffs import merge_split_geotiffs, has_gdal
+from modules.merge_geotiffs import ingest_downloaded_geotiffs, has_gdal
 
 
-def main() -> int:
+def _print_ingest_summary(summary: dict[str, object]) -> None:
+    def _as_list(name: str) -> list[object]:
+        value = summary.get(name, [])
+        if isinstance(value, list):
+            return value
+        return []
+
+    merged = _as_list("merged_weeks")
+    normalized = _as_list("single_tile_weeks_normalized")
+    failed = _as_list("failed_weeks")
+    warnings = _as_list("warnings")
+    unknown = _as_list("unknown_files")
+
+    print("Ingest summary:")
+    print(f"  merged_weeks={list(merged)}")
+    print(f"  single_tile_weeks_normalized={list(normalized)}")
+    print(f"  failed_weeks={list(failed)}")
+    print(f"  warnings={list(warnings)}")
+    print(f"  unknown_files={list(unknown)}")
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Download a Google Drive folder with progress bar"
     )
@@ -67,7 +88,7 @@ def main() -> int:
         action="store_true",
         help="Show what would be downloaded without actually downloading",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     save_dir = Path(args.save)
     creds_path = Path(args.credentials)
@@ -140,16 +161,11 @@ def main() -> int:
     print(f"\nDone: {downloaded} downloaded, {skipped} skipped (already exist)")
 
     if args.merge:
+        print("\nIngesting downloaded GeoTIFFs...")
         if not has_gdal():
-            print("WARNING: GDAL not installed, skipping merge step")
-            print("Install with: pip install gdal")
-        else:
-            print("\nMerging split GeoTIFFs...")
-            merged = merge_split_geotiffs(save_dir)
-            if merged:
-                print(f"Merged {len(merged)} groups into {save_dir / '_merged'}")
-            else:
-                print("No split files found to merge")
+            print("Note: GDAL not installed; multi-tile merges may fail during ingest")
+        summary = ingest_downloaded_geotiffs(save_dir)
+        _print_ingest_summary(summary)
 
     return 0
 

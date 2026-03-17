@@ -41,3 +41,22 @@ def test_filter_weekly_geotiffs_numeric_suffix_is_descending_old_to_new():
         "fr_wheat_feat_2025_data_002.tif",
         "fr_wheat_feat_2025_data_001.tif",
     ]
+
+
+def test_filter_weekly_geotiffs_accepts_tile_suffixed_week_exports() -> None:
+    from modules.drive_download import filter_weekly_geotiffs
+
+    files = [
+        {"id": "1", "name": "fr_wheat_feat_2021W01-0000009984-0000000000.tif"},
+        {"id": "2", "name": "fr_wheat_feat_2021W01-0000000000-0000000000.tif"},
+        {"id": "3", "name": "fr_wheat_feat_2021W02-0000000000-0000000000.tif"},
+        {"id": "4", "name": "notes.txt"},
+    ]
+
+    out = filter_weekly_geotiffs(files)
+
+    assert [f["name"] for f in out] == [
+        "fr_wheat_feat_2021W01-0000000000-0000000000.tif",
+        "fr_wheat_feat_2021W01-0000009984-0000000000.tif",
+        "fr_wheat_feat_2021W02-0000000000-0000000000.tif",
+    ]
