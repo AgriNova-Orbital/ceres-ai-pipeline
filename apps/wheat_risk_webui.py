@@ -169,7 +169,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         template_folder=str(app_root / "templates"),
         static_folder=str(app_root / "static"),
     )
-    app.config["SECRET_KEY"] = "wheat-risk-webui-dev"
+    secret_key = os.environ.get("WEBUI_SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("WEBUI_SECRET_KEY environment variable is required")
+    app.config["SECRET_KEY"] = secret_key
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
     app_db_path = Path(os.environ.get("APP_DB_PATH", str(root / "instance" / "app.db")))
@@ -287,7 +290,6 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.route("/auth/callback")
     def auth() -> Response:
         token = get_oauth_client(oauth).authorize_access_token()
-        session["google_token"] = token
         user = token.get("userinfo") or {}
         google_sub = str(user.get("sub") or "")
         email = str(user.get("email") or "")
@@ -298,6 +300,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 email=email,
                 display_name=str(display_name) if display_name else None,
             )
+            sqlite_store.save_user_oauth_token(user_id=local_user["id"], token=token)
             session["user_id"] = local_user["id"]
         session["user"] = user
         return redirect(url_for("home"))
@@ -305,7 +308,9 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.route("/logout")
     def logout() -> Response:
         session.pop("user", None)
-        session.pop("google_token", None)
+        user_id = session.pop("user_id", None)
+        if user_id:
+            sqlite_store.delete_user_oauth_token(user_id)
         return redirect(url_for("login"))
 
     @app.before_request
@@ -478,20 +483,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 cmd.append("--run")
 
             job = queue.enqueue(
-                "modules.jobs.tasks.run_script",
-                args=(cmd,),
+                "modules.jobs.tasks.task_run_script_for_user",
+                args=(
+                    {
+                        "user_id": session.get("user_id"),
+                        "cmd": cmd,
+                        "cwd": str(app.config["REPO_ROOT"]),
+                    },
+                ),
                 job_timeout="1h",
                 result_ttl="7d",
-                kwargs={
-                    "cwd": str(app.config["REPO_ROOT"]),
-                    "env_overrides": {
-                        "GOOGLE_OAUTH_TOKEN_JSON": json.dumps(
-                            session.get("google_token")
-                        )
-                    }
-                    if session.get("google_token")
-                    else {},
-                },
                 description=f"downloader: {action}",
             )
             try:
@@ -513,9 +514,9 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             job_kwargs = {
                 "input_dir": raw_dir,
                 "output_dir": "reports",
-                "start_date": start_date,
+                "start_date_str": start_date,
                 "cadence_days": 7,
-                "oauth_token": session.get("google_token"),
+                "user_id": session.get("user_id"),
             }
             job = queue.enqueue(
                 "modules.jobs.tasks.task_run_inventory",
@@ -582,7 +583,6 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 "step_size": int(patch),
                 "expected_weeks": 46,
                 "max_patches": int(max_patches),
-                "oauth_token": session.get("google_token"),
                 "user_id": session.get("user_id"),
             }
             job = queue.enqueue(
@@ -648,16 +648,24 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "base_patch": 64,
             "dry_run": action == "dry_run",
             "runs_dir": "runs",
-            "train_script": "scripts/train_staged_model.py",
-            "oauth_token": session.get("google_token"),
+            "train_script": "scripts/train_wheat_risk_lstm.py",
             "user_id": session.get("user_id"),
         }
 
         if action != "dry_run":
             job_kwargs["execute_train"] = True
-            job_kwargs["index_csv"] = "./data/wheat_risk/staged/L{level}/index.csv"
-            job_kwargs["root_dir"] = "./data/wheat_risk/staged/L{level}"
+            job_kwargs["index_csv_template"] = (
+                "./data/wheat_risk/staged/L{level}/index.csv"
+            )
+            job_kwargs["root_dir_template"] = "./data/wheat_risk/staged/L{level}"
             job_kwargs["device"] = "cuda"
+            job_kwargs["epochs"] = 10
+            job_kwargs["batch_size"] = 8
+            job_kwargs["lr"] = 1e-3
+            job_kwargs["embed_dim"] = 64
+            job_kwargs["hidden_dim"] = 128
+            job_kwargs["num_workers"] = 0
+            job_kwargs["seed_base"] = 42
 
         job = queue.enqueue(
             "modules.jobs.tasks.task_run_matrix",
@@ -704,7 +712,6 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "output_csv": "runs/staged_final/eval_metrics.csv",
             "best_json": "runs/staged_final/best_model.json",
             "device": "cuda",
-            "oauth_token": session.get("google_token"),
             "user_id": session.get("user_id"),
         }
 

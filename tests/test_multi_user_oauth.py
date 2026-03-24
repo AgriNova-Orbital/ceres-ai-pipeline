@@ -34,7 +34,18 @@ def client(app):
     return app.test_client()
 
 
-def test_auth_callback_creates_local_user(client, monkeypatch):
+def test_create_app_uses_secret_key_from_env(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("WEBUI_SECRET_KEY", "test-secret")
+    db_path = tmp_path / "state" / "app.db"
+    monkeypatch.setenv("APP_DB_PATH", str(db_path))
+
+    from apps.wheat_risk_webui import create_app
+
+    app = create_app(repo_root=tmp_path)
+    assert app.config["SECRET_KEY"] == "test-secret"
+
+
+def test_auth_callback_creates_local_user(client, monkeypatch, app):
     from apps import wheat_risk_webui
 
     class FakeGoogle:
@@ -58,10 +69,19 @@ def test_auth_callback_creates_local_user(client, monkeypatch):
     with client.session_transaction() as sess:
         assert sess["user_id"]
         assert sess["user"]["email"] == "user@example.com"
-        assert sess["google_token"]["access_token"] == "access-123"
+        assert "google_token" not in sess
+
+    store = app.config["SQLITE_STORE"]
+    with client.session_transaction() as sess:
+        user_id = sess["user_id"]
+    stored_token = store.get_user_oauth_token(user_id)
+    assert stored_token is not None
+    assert stored_token["access_token"] == "access-123"
 
 
-def test_auth_callback_reuses_same_local_uuid_for_same_google_sub(client, monkeypatch):
+def test_auth_callback_reuses_same_local_uuid_for_same_google_sub(
+    client, monkeypatch, app
+):
     from apps import wheat_risk_webui
 
     class FakeGoogle:

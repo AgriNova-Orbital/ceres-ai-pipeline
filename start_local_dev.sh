@@ -38,6 +38,7 @@ fi
 export PYTHONUNBUFFERED=1
 export RQ_LOG_LEVEL=DEBUG
 export REDIS_URL=redis://localhost:6379/0
+export WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-local-dev-secret-$(date +%s)}"
 
 echo "Starting services... (Press Ctrl+C to stop)"
 

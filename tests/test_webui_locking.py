@@ -19,10 +19,16 @@ def _initialize_app(app, tmp_path: Path) -> None:
     app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
 
 
-def _login(client) -> None:
+def _login(client, app=None) -> None:
     with client.session_transaction() as sess:
         sess["user"] = {"email": "user@example.com"}
-        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
+        sess["user_id"] = "uuid-user-123"
+    if app is not None:
+        store = app.config["SQLITE_STORE"]
+        store.save_user_oauth_token(
+            user_id="uuid-user-123",
+            token={"access_token": "abc", "refresh_token": "def"},
+        )
 
 
 def test_job_locking_prevents_duplicate_tasks(monkeypatch, tmp_path: Path):
@@ -58,7 +64,7 @@ def test_job_locking_prevents_duplicate_tasks(monkeypatch, tmp_path: Path):
     app.config["TESTING"] = True
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     # First call: Should succeed and set the lock
     fake_redis_store.clear()

@@ -1,4 +1,5 @@
 # modules/jobs/tasks.py
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -24,6 +25,21 @@ def run_script(
     return {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr}
 
 
+def task_run_script_for_user(kwargs: dict[str, Any]) -> dict:
+    user_id = kwargs.pop("user_id", None)
+    cmd = kwargs.pop("cmd")
+    cwd = kwargs.pop("cwd", ".")
+    env_overrides: dict[str, str] = {}
+    if user_id:
+        from modules.persistence.sqlite_store import SQLiteStore
+
+        store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
+        token = store.get_user_oauth_token(user_id)
+        if token:
+            env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
+    return run_script(cmd=cmd, cwd=cwd, env_overrides=env_overrides or None)
+
+
 def task_build_dataset(kwargs: dict[str, Any]) -> None:
     from modules.services.dataset_service import run_build
 
@@ -39,10 +55,9 @@ def task_build_dataset(kwargs: dict[str, Any]) -> None:
 def task_run_matrix(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.training_matrix_service import run_matrix
 
-    kwargs.pop("oauth_token", None)
     kwargs.pop("user_id", None)
 
-    # Convert string paths back to Path objects where necessary
+    # Convert concrete string paths back to Path objects, leave templates as strings
     kwargs["runs_dir"] = Path(kwargs["runs_dir"])
     if kwargs.get("index_csv"):
         kwargs["index_csv"] = Path(kwargs["index_csv"])
@@ -56,7 +71,6 @@ def task_run_matrix(kwargs: dict[str, Any]) -> dict[str, Any]:
 def task_run_eval(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.evaluation_service import run_evaluation
 
-    kwargs.pop("oauth_token", None)
     kwargs.pop("user_id", None)
 
     # Convert string paths back to Path objects
@@ -69,7 +83,6 @@ def task_run_eval(kwargs: dict[str, Any]) -> dict[str, Any]:
 def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.inventory_service import run_inventory
 
-    kwargs.pop("oauth_token", None)
     kwargs.pop("user_id", None)
 
     # Convert string paths back to Path objects
