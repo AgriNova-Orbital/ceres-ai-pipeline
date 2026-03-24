@@ -84,6 +84,22 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _resolve_allowed_preview_path(repo_root: Path, raw_path: str) -> Path:
+    allowed_roots = [
+        (repo_root / "data").resolve(),
+        (repo_root / "reports").resolve(),
+        (repo_root / "runs").resolve(),
+    ]
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = (repo_root / path).resolve()
+    else:
+        path = path.resolve()
+    if not any(path == root or root in path.parents for root in allowed_roots):
+        raise PermissionError(raw_path)
+    return path
+
+
 def _normalize_channel(x: np.ndarray) -> np.ndarray:
     x = np.asarray(x, dtype=np.float32)
     finite = np.isfinite(x)
@@ -771,7 +787,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         except Exception as e:
             return Response(f"Invalid bands: {e}", status=400)
 
-        path = Path(p)
+        try:
+            path = _resolve_allowed_preview_path(app.config["REPO_ROOT"], p)
+        except PermissionError:
+            return Response("Forbidden", status=403)
         if not path.exists():
             return Response(f"Not found: {path}", status=404)
 
@@ -794,7 +813,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         except Exception as e:
             return Response(f"Invalid channels: {e}", status=400)
 
-        path = Path(p)
+        try:
+            path = _resolve_allowed_preview_path(app.config["REPO_ROOT"], p)
+        except PermissionError:
+            return Response("Forbidden", status=403)
         if not path.exists():
             return Response(f"Not found: {path}", status=404)
 

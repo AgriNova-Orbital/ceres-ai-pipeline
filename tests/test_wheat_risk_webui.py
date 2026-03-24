@@ -139,7 +139,9 @@ def test_webui_path_fields_support_scanned_choices_and_custom_input(
 def test_raw_preview_endpoint_returns_png(tmp_path: Path) -> None:
     from apps.wheat_risk_webui import create_app
 
-    tif = tmp_path / "week_001.tif"
+    data_dir = tmp_path / "data" / "raw" / "france_2025_weekly"
+    data_dir.mkdir(parents=True)
+    tif = data_dir / "week_001.tif"
     _mk_fake_tif(tif)
 
     app = create_app(repo_root=tmp_path)
@@ -155,7 +157,9 @@ def test_raw_preview_endpoint_returns_png(tmp_path: Path) -> None:
 def test_patch_preview_endpoint_returns_png(tmp_path: Path) -> None:
     from apps.wheat_risk_webui import create_app
 
-    npz = tmp_path / "sample.npz"
+    data_dir = tmp_path / "data" / "wheat_risk" / "staged" / "L1"
+    data_dir.mkdir(parents=True)
+    npz = data_dir / "sample.npz"
     _mk_fake_npz(npz)
 
     app = create_app(repo_root=tmp_path)
@@ -166,6 +170,36 @@ def test_patch_preview_endpoint_returns_png(tmp_path: Path) -> None:
     assert resp.status_code == 200
     assert resp.mimetype == "image/png"
     assert len(resp.data) > 100
+
+
+def test_patch_preview_rejects_paths_outside_repo_allowlist(tmp_path: Path) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    outside = Path("/tmp/outside-preview.npz")
+    _mk_fake_npz(outside)
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+
+    resp = client.get(f"/api/preview/patch?path={outside}&t=0")
+    assert resp.status_code == 403
+
+
+def test_raw_preview_rejects_paths_outside_repo_allowlist(tmp_path: Path) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    outside = Path("/tmp/outside-preview.tif")
+    _mk_fake_tif(outside)
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+
+    resp = client.get(f"/api/preview/raw?path={outside}")
+    assert resp.status_code == 403
 
 
 def test_downloader_preview_runs_dry_run_command(
