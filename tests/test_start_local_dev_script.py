@@ -30,3 +30,12 @@ def test_start_local_dev_supports_verbose_and_dry_run() -> None:
         in out
     )
     assert "Worker logs will stream to stdout" in out
+
+
+def test_start_local_dev_exports_webui_secret_key(tmp_path: Path):
+    script = Path(__file__).resolve().parent.parent / "start_local_dev.sh"
+    assert script.exists(), "start_local_dev.sh not found"
+
+    content = script.read_text(encoding="utf-8")
+    assert "WEBUI_SECRET_KEY" in content
+    assert "export WEBUI_SECRET_KEY" in content

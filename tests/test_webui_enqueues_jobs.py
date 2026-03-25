@@ -19,11 +19,16 @@ def _initialize_app(app, tmp_path: Path) -> None:
     app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
 
 
-def _login(client) -> None:
+def _login(client, app=None) -> None:
     with client.session_transaction() as sess:
         sess["user"] = {"email": "user@example.com", "sub": "sub-123"}
-        sess["google_token"] = {"access_token": "abc", "refresh_token": "def"}
         sess["user_id"] = "uuid-user-123"
+    if app is not None:
+        store = app.config["SQLITE_STORE"]
+        store.save_user_oauth_token(
+            user_id="uuid-user-123",
+            token={"access_token": "abc", "refresh_token": "def"},
+        )
 
 
 def test_downloader_enqueues_job_instead_of_running(monkeypatch, tmp_path: Path):
@@ -42,7 +47,7 @@ def test_downloader_enqueues_job_instead_of_running(monkeypatch, tmp_path: Path)
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     client.post("/run/downloader", data={"action": "preview_export"})
     mock_queue.enqueue.assert_called_once()
@@ -63,7 +68,7 @@ def test_webui_enqueues_service_tasks_instead_of_run_script(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     # Test inventory
     client.post("/run/downloader", data={"action": "refresh_inventory"})
@@ -105,7 +110,7 @@ def test_job_status_endpoint_returns_json(monkeypatch, tmp_path: Path):
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
     resp = client.get("/api/jobs")
     assert resp.status_code == 200
     assert isinstance(resp.json, list)
@@ -124,7 +129,7 @@ def test_job_status_endpoint_handles_real_enqueued_job_with_fakeredis(
     _initialize_app(app, tmp_path)
     client = app.test_client()
 
-    _login(client)
+    _login(client, app)
 
     q = get_queue_conn()
     q.enqueue(
@@ -153,13 +158,13 @@ def test_downloader_enqueue_includes_user_oauth_token(monkeypatch, tmp_path: Pat
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     client.post("/run/downloader", data={"action": "refresh_inventory"})
     _, kwargs = mock_queue.enqueue.call_args
     job_kwargs = kwargs["args"][0]
-    assert job_kwargs["oauth_token"]["access_token"] == "abc"
-    assert job_kwargs["oauth_token"]["refresh_token"] == "def"
+    assert job_kwargs["user_id"] == "uuid-user-123"
+    assert "oauth_token" not in job_kwargs
 
 
 def test_enqueued_jobs_include_local_user_id(monkeypatch, tmp_path: Path):
@@ -177,7 +182,7 @@ def test_enqueued_jobs_include_local_user_id(monkeypatch, tmp_path: Path):
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     client.post("/run/eval")
     _, kwargs = mock_queue.enqueue.call_args
@@ -202,7 +207,7 @@ def test_downloader_custom_raw_dir_overrides_scanned_selection(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     client.post(
         "/run/downloader",
@@ -217,7 +222,7 @@ def test_downloader_custom_raw_dir_overrides_scanned_selection(
     assert job_kwargs["input_dir"] == "/tmp/custom_raw_dir"
 
 
-def test_downloader_preview_export_passes_oauth_env_to_run_script(
+def test_downloader_preview_export_passes_user_id_to_worker_task(
     monkeypatch, tmp_path: Path
 ):
     from apps.wheat_risk_webui import create_app
@@ -234,7 +239,7 @@ def test_downloader_preview_export_passes_oauth_env_to_run_script(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
-    _login(client)
+    _login(client, app)
 
     client.post(
         "/run/downloader",
@@ -246,24 +251,8 @@ def test_downloader_preview_export_passes_oauth_env_to_run_script(
             "limit": "4",
         },
     )
-    _, kwargs = mock_queue.enqueue.call_args
-    env_overrides = kwargs["kwargs"]["env_overrides"]
-    assert "GOOGLE_OAUTH_TOKEN_JSON" in env_overrides
-
-
-def test_drive_download_job_result_shape_is_json_friendly() -> None:
-    sample = {
-        "downloaded": 1,
-        "total_size": 10,
-        "merged_weeks": [],
-        "single_tile_weeks_normalized": ["2021W01"],
-        "failed_weeks": [],
-        "warnings": [],
-        "unknown_files": [],
-    }
-
-    assert sample["single_tile_weeks_normalized"] == ["2021W01"]
-    assert isinstance(sample["merged_weeks"], list)
-    assert isinstance(sample["failed_weeks"], list)
-    assert isinstance(sample["warnings"], list)
-    assert isinstance(sample["unknown_files"], list)
+    args, kwargs = mock_queue.enqueue.call_args
+    assert args[0] == "modules.jobs.tasks.task_run_script_for_user"
+    job_kwargs = kwargs["args"][0]
+    assert job_kwargs["user_id"] == "uuid-user-123"
+    assert "cmd" in job_kwargs

@@ -84,6 +84,7 @@ def test_create_app_bootstraps_sqlite_store_from_app_db_path(
     assert app.config["SQLITE_STORE"].get_settings()["initialized"] is False
     assert db_path.exists()
 
+
 def test_sqlite_store_persists_user_oauth_token(tmp_path: Path):
     from modules.persistence.sqlite_store import SQLiteStore
 
@@ -102,4 +103,15 @@ def test_sqlite_store_persists_user_oauth_token(tmp_path: Path):
     }
 
     store.save_user_oauth_token(user_id=user["id"], token=token)
-    assert store.get_user_oauth_token(user["id"]) == token
+    retrieved = store.get_user_oauth_token(user["id"])
+    assert retrieved == token
+
+    # Test update
+    token2 = token.copy()
+    token2["access_token"] = "access-789"
+    store.save_user_oauth_token(user_id=user["id"], token=token2)
+    retrieved2 = store.get_user_oauth_token(user["id"])
+    assert retrieved2 == token2
+
+    store.delete_user_oauth_token(user_id=user["id"])
+    assert store.get_user_oauth_token(user["id"]) is None

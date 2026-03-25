@@ -56,6 +56,14 @@ run_cmd() {
   fi
 }
 
+# ===========================================
+# Environment Setup
+# ===========================================
+export PYTHONUNBUFFERED=1
+export RQ_LOG_LEVEL=DEBUG
+export REDIS_URL=redis://localhost:6379/0
+export WEBUI_SECRET_KEY="${WEBUI_SECRET_KEY:-local-dev-secret-$(date +%s)}"
+
 cleanup() {
   if [[ "$DRY_RUN" == "1" ]]; then
     return
