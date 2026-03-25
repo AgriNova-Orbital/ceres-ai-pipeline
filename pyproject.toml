@@ -44,6 +44,7 @@ distributed = [
 dev = [
     "fakeredis>=2.23.0",
     "pytest>=9.0.0",
+    "selenium>=4.15.0",
 ]
 
 [[tool.uv.index]]
