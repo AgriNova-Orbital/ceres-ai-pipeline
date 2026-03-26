@@ -40,6 +40,9 @@ def discover_google_oauth_client_secret_file(
         matches = sorted(root.glob("client_secret_*.json"))
         if matches:
             return matches[0]
+        plain = root / "client_secret.json"
+        if plain.exists():
+            return plain
     return None
 
 

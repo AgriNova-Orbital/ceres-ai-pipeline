@@ -250,6 +250,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         try:
             cid, csecret, _ = get_google_web_client_config()
             if cid != "dummy_id":
+                oauth._clients.pop("google", None)
                 oauth.register(
                     name="google",
                     client_id=cid,
@@ -266,6 +267,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if not get_settings()["initialized"]:
             return redirect(url_for("setup"))
         _sync_oauth()
+        google = oauth.create_client("google")
         redirect_base = get_settings().get("redirect_base_url")
         if redirect_base:
             redirect_uri = str(redirect_base).rstrip("/") + "/auth/callback"
@@ -273,7 +275,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             redirect_uri = get_google_oauth_redirect_uri() or url_for(
                 "auth", _external=True
             )
-        return get_oauth_client(oauth).authorize_redirect(redirect_uri)
+        return google.authorize_redirect(redirect_uri)
 
     @app.route("/setup", methods=["GET", "POST"])
     def setup() -> Response | str:
@@ -337,7 +339,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.route("/auth/callback")
     def auth() -> Response:
-        token = get_oauth_client(oauth).authorize_access_token()
+        token = oauth.create_client("google").authorize_access_token()
         user = token.get("userinfo") or {}
         google_sub = str(user.get("sub") or "")
         email = str(user.get("email") or "")
