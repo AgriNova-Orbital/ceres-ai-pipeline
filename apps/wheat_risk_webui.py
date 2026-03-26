@@ -62,7 +62,10 @@ def _make_redis_conn(*, decode_responses: bool) -> Redis:
             )
         except ImportError:
             pass
-    return Redis(decode_responses=decode_responses)
+    return Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        decode_responses=decode_responses,
+    )
 
 
 def get_redis_conn() -> Redis:
@@ -206,12 +209,13 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     sqlite_store.ensure_schema()
     app.config["APP_DB_PATH"] = app_db_path
     app.config["SQLITE_STORE"] = sqlite_store
-    app_settings = sqlite_store.get_settings()
-    app.config["APP_SETTINGS"] = app_settings
 
-    if app_settings["initialized"]:
-        secret_path = app_settings.get("oauth_client_secret_path")
-        redirect_base = app_settings.get("redirect_base_url")
+    def get_settings() -> dict[str, Any]:
+        return sqlite_store.get_settings()
+
+    if get_settings()["initialized"]:
+        secret_path = get_settings().get("oauth_client_secret_path")
+        redirect_base = get_settings().get("redirect_base_url")
         if secret_path and not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
             os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(secret_path)
         if redirect_base and not os.environ.get("GOOGLE_OAUTH_REDIRECT_URI"):
@@ -241,11 +245,28 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         client_kwargs={"scope": " ".join(DEFAULT_SCOPES)},
     )
 
+    def _sync_oauth() -> None:
+        """Re-register OAuth client with latest credentials (handles multi-worker)."""
+        try:
+            cid, csecret, _ = get_google_web_client_config()
+            if cid != "dummy_id":
+                oauth.register(
+                    name="google",
+                    client_id=cid,
+                    client_secret=csecret,
+                    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+                    client_kwargs={"scope": " ".join(DEFAULT_SCOPES)},
+                    overwrite=True,
+                )
+        except Exception:
+            pass
+
     @app.route("/login")
     def login() -> Response:
-        if not app.config["APP_SETTINGS"]["initialized"]:
+        if not get_settings()["initialized"]:
             return redirect(url_for("setup"))
-        redirect_base = app.config["APP_SETTINGS"].get("redirect_base_url")
+        _sync_oauth()
+        redirect_base = get_settings().get("redirect_base_url")
         if redirect_base:
             redirect_uri = str(redirect_base).rstrip("/") + "/auth/callback"
         else:
@@ -290,13 +311,14 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                     oauth_client_secret_path=secret_path,
                     redirect_base_url=redirect_base,
                 )
-                app.config["APP_SETTINGS"] = sqlite_store.get_settings()
                 os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = secret_path
                 os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = (
                     redirect_base + "/auth/callback"
                 )
+                _sync_oauth()
+
                 flash("Initialization saved.", "success")
-                return render_template("setup.html", step=3, db_ok=True, redis_ok=True)
+                return redirect(url_for("setup", step=3))
 
         if step == "2":
             return render_template("setup.html", step=2, db_ok=True, redis_ok=True)
@@ -353,7 +375,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             return None
         if request.endpoint is None:
             return None
-        if not app.config["APP_SETTINGS"]["initialized"]:
+        if not get_settings()["initialized"]:
             return redirect(url_for("setup"))
         if "user" not in session:
             return redirect(url_for("login"))
@@ -415,8 +437,9 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if mode not in {"basic", "advanced"}:
             mode = "basic"
 
+        # Always read fresh from DB
         is_authenticated = "user" in session
-        if not app.config["APP_SETTINGS"]["initialized"]:
+        if not get_settings()["initialized"]:
             return redirect(url_for("setup"))
         raw_dirs = get_raw_data_dirs()
         default_raw_dir = raw_dirs[0]
