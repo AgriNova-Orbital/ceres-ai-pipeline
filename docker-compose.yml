@@ -21,9 +21,8 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
-      - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/app/state/client_secret.json
       - PYTHONUNBUFFERED=1
-      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?Set WEBUI_SECRET_KEY in your environment}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-default-secret}
     ports:
       - "5055:5055"
     volumes:
@@ -44,7 +43,6 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
-      - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/app/state/client_secret.json
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=DEBUG
     volumes:

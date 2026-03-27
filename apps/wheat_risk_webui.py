@@ -5,7 +5,8 @@ import json
 import os
 from redis import Redis
 from rq import Queue
-from authlib.integrations.flask_client import OAuth
+
+# WIP: OAuth - from authlib.integrations.flask_client import OAuth
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,13 +26,14 @@ from flask import (
     url_for,
 )
 
-from modules.google_user_oauth import (
-    DEFAULT_SCOPES,
-    discover_google_oauth_client_secret_file,
-    get_google_oauth_redirect_uri,
-    get_google_web_client_config,
-)
-from modules.google_user_oauth import build_google_credentials_from_oauth_token
+# WIP: OAuth
+# from modules.google_user_oauth import (
+#     DEFAULT_SCOPES,
+#     discover_google_oauth_client_secret_file,
+#     get_google_oauth_redirect_uri,
+#     get_google_web_client_config,
+# )
+# from modules.google_user_oauth import build_google_credentials_from_oauth_token
 from modules.persistence.sqlite_store import SQLiteStore
 
 
@@ -80,8 +82,9 @@ def get_queue_conn() -> Queue:
     return Queue(connection=get_queue_redis_conn())
 
 
-def get_oauth_client(oauth: OAuth):
-    return getattr(oauth, "google", oauth)
+# WIP: OAuth
+# def get_oauth_client(oauth: OAuth):
+#     return getattr(oauth, "google", oauth)
 
 
 def _now_iso() -> str:
@@ -198,9 +201,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         template_folder=str(app_root / "templates"),
         static_folder=str(app_root / "static"),
     )
-    secret_key = os.environ.get("WEBUI_SECRET_KEY")
-    if not secret_key:
-        raise RuntimeError("WEBUI_SECRET_KEY environment variable is required")
+    secret_key = os.environ.get("WEBUI_SECRET_KEY", os.urandom(32).hex())
     app.config["SECRET_KEY"] = secret_key
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
@@ -210,177 +211,55 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     app.config["APP_DB_PATH"] = app_db_path
     app.config["SQLITE_STORE"] = sqlite_store
 
-    def get_settings() -> dict[str, Any]:
-        return sqlite_store.get_settings()
+    # ── Auth Routes ──────────────────────────────────────
 
-    if get_settings()["initialized"]:
-        secret_path = get_settings().get("oauth_client_secret_path")
-        redirect_base = get_settings().get("redirect_base_url")
-        if secret_path and not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
-            os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(secret_path)
-        if redirect_base and not os.environ.get("GOOGLE_OAUTH_REDIRECT_URI"):
-            os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = (
-                str(redirect_base).rstrip("/") + "/auth/callback"
-            )
-    elif os.environ.get("ALLOW_ENV_BOOTSTRAP") == "1":
-        if not os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET_FILE"):
-            discovered_secret = discover_google_oauth_client_secret_file([root])
-            if discovered_secret is not None:
-                os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = str(discovered_secret)
-
-    try:
-        client_id, client_secret, project_id = get_google_web_client_config()
-    except Exception:
-        client_id, client_secret, project_id = "dummy_id", "dummy_secret", None
-
-    if project_id and not os.environ.get("GOOGLE_PROJECT_ID"):
-        os.environ["GOOGLE_PROJECT_ID"] = project_id
-
-    oauth = OAuth(app)
-    oauth.register(
-        name="google",
-        client_id=client_id,
-        client_secret=client_secret,
-        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-        client_kwargs={"scope": " ".join(DEFAULT_SCOPES)},
-    )
-
-    def _sync_oauth() -> None:
-        """Re-register OAuth client with latest credentials (handles multi-worker)."""
-        try:
-            cid, csecret, _ = get_google_web_client_config()
-            if cid != "dummy_id":
-                oauth._clients.pop("google", None)
-                oauth.register(
-                    name="google",
-                    client_id=cid,
-                    client_secret=csecret,
-                    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-                    client_kwargs={"scope": " ".join(DEFAULT_SCOPES)},
-                    overwrite=True,
-                )
-        except Exception:
-            pass
-
-    @app.route("/login")
-    def login() -> Response:
-        if not get_settings()["initialized"]:
-            return redirect(url_for("setup"))
-        _sync_oauth()
-        google = oauth.create_client("google")
-        redirect_base = get_settings().get("redirect_base_url")
-        if redirect_base:
-            redirect_uri = str(redirect_base).rstrip("/") + "/auth/callback"
-        else:
-            redirect_uri = get_google_oauth_redirect_uri() or url_for(
-                "auth", _external=True
-            )
-        return google.authorize_redirect(redirect_uri)
-
-    @app.route("/setup", methods=["GET", "POST"])
-    def setup() -> Response | str:
-        step = request.args.get("step", "1")
+    @app.route("/login", methods=["GET", "POST"])
+    def login() -> Response | str:
         if request.method == "POST":
-            step = request.form.get("step", "1")
-            if step == "3":
-                secret_path = request.form.get("oauth_client_secret_path", "").strip()
-                uploaded_secret = request.files.get("oauth_client_secret_upload")
-                redirect_base = (
-                    request.form.get("redirect_base_url", "").strip().rstrip("/")
-                )
-                if uploaded_secret and uploaded_secret.filename:
-                    state_dir = app.config["APP_DB_PATH"].parent
-                    state_dir.mkdir(parents=True, exist_ok=True)
-                    uploaded_name = (
-                        Path(uploaded_secret.filename).name or "client_secret.json"
-                    )
-                    secret_path = str(state_dir / uploaded_name)
-                    uploaded_secret.save(secret_path)
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            if sqlite_store.verify_admin(username, password):
+                session["user"] = {"username": username}
+                if sqlite_store.is_default_password():
+                    flash("Please change your default password.", "warning")
+                    return redirect(url_for("change_password"))
+                return redirect(url_for("home"))
+            flash("Invalid username or password.", "error")
+        return render_template("login.html")
 
-                if not secret_path or not Path(secret_path).exists():
-                    flash("OAuth client secret path is missing or invalid.", "error")
-                    return render_template(
-                        "setup.html", step=2, db_ok=True, redis_ok=True
-                    )
-                if not redirect_base:
-                    flash("Redirect base URL is required.", "error")
-                    return render_template(
-                        "setup.html", step=2, db_ok=True, redis_ok=True
-                    )
-
-                sqlite_store.save_settings(
-                    initialized=True,
-                    oauth_client_secret_path=secret_path,
-                    redirect_base_url=redirect_base,
-                )
-                os.environ["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = secret_path
-                os.environ["GOOGLE_OAUTH_REDIRECT_URI"] = (
-                    redirect_base + "/auth/callback"
-                )
-                _sync_oauth()
-
-                flash("Initialization saved.", "success")
-                return redirect(url_for("setup", step=3))
-
-        if step == "2":
-            return render_template("setup.html", step=2, db_ok=True, redis_ok=True)
-
-        # Step 1 - System Checks
-        db_ok = app.config["APP_DB_PATH"].exists() or True
-        redis_ok = False
-        try:
-            redis = get_redis_conn()
-            redis.ping()
-            redis_ok = True
-        except Exception:
-            redis_ok = False
-
-        return render_template("setup.html", step=1, db_ok=True, redis_ok=redis_ok)
-
-    @app.route("/auth/callback")
-    def auth() -> Response:
-        token = oauth.create_client("google").authorize_access_token()
-        user = token.get("userinfo") or {}
-        google_sub = str(user.get("sub") or "")
-        email = str(user.get("email") or "")
-        display_name = user.get("name")
-        if google_sub:
-            local_user = sqlite_store.get_or_create_user(
-                google_sub=google_sub,
-                email=email,
-                display_name=str(display_name) if display_name else None,
-            )
-            sqlite_store.save_user_oauth_token(user_id=local_user["id"], token=token)
-            session["user_id"] = local_user["id"]
-        session["user"] = user
-        return redirect(url_for("home"))
+    @app.route("/change-password", methods=["GET", "POST"])
+    def change_password() -> Response | str:
+        if "user" not in session:
+            return redirect(url_for("login"))
+        if request.method == "POST":
+            new_pw = request.form.get("new_password", "")
+            confirm = request.form.get("confirm_password", "")
+            if not new_pw or len(new_pw) < 4:
+                flash("Password must be at least 4 characters.", "error")
+            elif new_pw != confirm:
+                flash("Passwords do not match.", "error")
+            else:
+                sqlite_store.change_admin_password(new_pw)
+                flash("Password changed successfully.", "success")
+                return redirect(url_for("home"))
+        return render_template("change_password.html")
 
     @app.route("/logout")
     def logout() -> Response:
-        session.pop("user", None)
-        user_id = session.pop("user_id", None)
-        if user_id:
-            sqlite_store.delete_user_oauth_token(user_id)
+        session.clear()
         return redirect(url_for("login"))
 
     @app.before_request
     def require_login() -> Response | None:
-        allowed_endpoints = {
-            "home",
-            "setup",
-            "login",
-            "auth",
-            "logout",
-            "static",
-        }
-        if request.endpoint in allowed_endpoints:
+        allowed = {"login", "logout", "change_password", "static"}
+        if request.endpoint in allowed:
             return None
         if request.endpoint is None:
             return None
-        if not get_settings()["initialized"]:
-            return redirect(url_for("setup"))
         if "user" not in session:
             return redirect(url_for("login"))
+        if sqlite_store.is_default_password() and request.endpoint != "change_password":
+            return redirect(url_for("change_password"))
         return None
 
     def get_raw_data_dirs() -> list[str]:
@@ -441,8 +320,6 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
         # Always read fresh from DB
         is_authenticated = "user" in session
-        if not get_settings()["initialized"]:
-            return redirect(url_for("setup"))
         raw_dirs = get_raw_data_dirs()
         default_raw_dir = raw_dirs[0]
         raw_tif_paths = get_scanned_raw_tif_paths()
@@ -791,17 +668,19 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         flash("Evaluation enqueued.", "success")
         return redirect(url_for("home"))
 
+    # WIP: OAuth - Drive service requires Google OAuth
     def _build_drive_service() -> Any:
-        google_token = session.get("google_token")
-        if not google_token:
-            return None
-        try:
-            import googleapiclient.discovery  # type: ignore
-
-            creds = build_google_credentials_from_oauth_token(google_token)
-            return googleapiclient.discovery.build("drive", "v3", credentials=creds)
-        except Exception:
-            return None
+        return None
+        # WIP: OAuth
+        # google_token = session.get("google_token")
+        # if not google_token:
+        #     return None
+        # try:
+        #     import googleapiclient.discovery
+        #     creds = build_google_credentials_from_oauth_token(google_token)
+        #     return googleapiclient.discovery.build("drive", "v3", credentials=creds)
+        # except Exception:
+        #     return None
 
     @app.get("/api/drive/list")
     def drive_list() -> Response:
@@ -894,7 +773,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         job_kwargs = {
             "folder_id": folder_id,
             "save_dir": save_dir,
-            "oauth_token": session.get("google_token"),
+            "oauth_token": None,  # WIP: OAuth - was session.get("google_token")
         }
         job = queue.enqueue(
             "modules.jobs.tasks.task_drive_download",

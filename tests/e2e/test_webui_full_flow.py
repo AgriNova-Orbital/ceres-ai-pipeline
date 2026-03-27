@@ -1,14 +1,12 @@
-"""End-to-end test: Setup + Login flow with Brave browser.
+"""End-to-end test: Login flow with Brave browser.
 
 Usage:
-    WEBUI_SECRET_KEY=test-secret-key uv run pytest tests/e2e/test_webui_full_flow.py -v -s
+    uv run pytest tests/e2e/test_webui_full_flow.py -v -s
 """
 
 from __future__ import annotations
 
-import json
 import time
-from pathlib import Path
 
 import pytest
 
@@ -36,81 +34,53 @@ def driver():
     d.quit()
 
 
-# ── Setup Flow ──────────────────────────────────────────────
-
-
-def test_01_setup_step1(driver):
-    driver.get(f"{BASE_URL}/setup")
-    body = driver.find_element(By.TAG_NAME, "body").text
-    assert "App DB" in body
-    print(f"\n[1] Step 1 OK → {driver.current_url}")
-
-
-def test_02_setup_step2(driver):
-    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
-    time.sleep(1)
-    assert "OAuth Configuration" in driver.find_element(By.TAG_NAME, "body").text
-    print(f"[2] Step 2 OK → {driver.current_url}")
-
-
-def test_03_setup_submit_and_reach_step3(driver, tmp_path: Path):
-    secret_file = tmp_path / "client_secret.json"
-    secret_file.write_text(
-        json.dumps(
-            {
-                "web": {
-                    "client_id": "test-client-id.apps.googleusercontent.com",
-                    "client_secret": "test-secret",
-                    "redirect_uris": [f"{BASE_URL}/auth/callback"],
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    driver.find_element(By.NAME, "redirect_base_url").send_keys(BASE_URL)
-    driver.find_element(By.NAME, "oauth_client_secret_upload").send_keys(
-        str(secret_file)
-    )
-    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
-
-    for _ in range(20):
-        if "step=3" in driver.current_url:
-            break
-        time.sleep(0.5)
-
-    assert "step=3" in driver.current_url, f"Never reached step 3: {driver.current_url}"
-    page = driver.page_source
-    assert "Initialization" in page
-    print(f"[3] Step 3 OK → {driver.current_url}")
-
-
-# ── Post-Setup Flow (each test starts fresh to avoid cookie/session issues) ──
-
-
-def test_04_dashboard_no_setup_loop(driver):
-    """After setup, going to / should NOT redirect back to /setup."""
+def test_01_home_redirects_to_login(driver):
     driver.get(BASE_URL)
     time.sleep(1)
-    url = driver.current_url
-    body = driver.find_element(By.TAG_NAME, "body").text
-    print(f"[4] GET / → {url}")
-    print(f"    Body: {body[:120]}")
-    assert "/setup" not in url, f"Bug: redirected to setup! URL={url}"
-    assert "App DB" not in body, f"Bug: showing setup page!"
+    assert "/login" in driver.current_url
+    print(f"\n[1] Redirected to login → {driver.current_url}")
 
 
-def test_05_login_redirects_to_google(driver):
-    """/login should redirect to Google OAuth (not /setup)."""
-    driver.get(f"{BASE_URL}/login")
-    time.sleep(2)
-    url = driver.current_url
-    body = driver.find_element(By.TAG_NAME, "body").text
-    print(f"[5] Login → {url}")
-    print(f"    Body: {body[:120]}")
+def test_02_login_with_default_credentials(driver):
+    driver.find_element(By.NAME, "username").send_keys("admin")
+    driver.find_element(By.NAME, "password").send_keys("admin")
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    time.sleep(1)
+    assert "/change-password" in driver.current_url
+    print(f"[2] Default login → {driver.current_url}")
 
-    assert "/setup" not in url, f"Bug: /login redirected to setup!"
-    assert "accounts.google.com" in url, f"Expected Google redirect, got: {url}"
-    # The test client_id doesn't exist in Google, so we expect invalid_client
-    # But the important thing is: it went to Google, NOT back to setup
-    print("    → Correctly redirected to Google OAuth")
+
+def test_03_change_password(driver):
+    driver.find_element(By.NAME, "new_password").send_keys("newpass123")
+    driver.find_element(By.NAME, "confirm_password").send_keys("newpass123")
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    time.sleep(1)
+    assert "/change-password" not in driver.current_url
+    print(f"[3] Password changed → {driver.current_url}")
+
+
+def test_04_logout_and_login_with_new_password(driver):
+    driver.get(f"{BASE_URL}/logout")
+    time.sleep(1)
+    assert "/login" in driver.current_url
+
+    driver.find_element(By.NAME, "username").send_keys("admin")
+    driver.find_element(By.NAME, "password").send_keys("newpass123")
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    time.sleep(1)
+    assert "/change-password" not in driver.current_url
+    assert "/login" not in driver.current_url
+    print(f"[4] Login with new password → {driver.current_url}")
+
+
+def test_05_wrong_password(driver):
+    driver.get(f"{BASE_URL}/logout")
+    time.sleep(1)
+    driver.find_element(By.NAME, "username").send_keys("admin")
+    driver.find_element(By.NAME, "password").send_keys("wrong")
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    time.sleep(1)
+    assert "/login" in driver.current_url
+    page = driver.page_source
+    assert "Invalid" in page
+    print(f"[5] Wrong password rejected → {driver.current_url}")
