@@ -37,6 +37,7 @@ from flask import (
 from modules.persistence.sqlite_store import SQLiteStore
 from apps.api_auth import register_auth_api
 from apps.api_admin import register_admin_api
+from apps.api_runs import register_runs_api
 
 
 _FAKE_REDIS_SERVER = None
@@ -261,6 +262,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if request.endpoint and (
             request.endpoint.startswith("api_auth.")
             or request.endpoint.startswith("api_admin.")
+            or request.endpoint.startswith("api_runs.")
         ):
             return None
         if "user" not in session:
@@ -286,6 +288,15 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if not dirs:
             return ["data/raw (Empty)"]
         return dirs
+
+    register_runs_api(
+        app,
+        sqlite_store,
+        get_redis_conn(),
+        app.config["JOB_HISTORY"],
+        get_queue_conn,
+        get_raw_data_dirs,
+    )
 
     def get_scanned_raw_tif_paths(limit: int = 100) -> list[str]:
         raw_base = Path(app.config["REPO_ROOT"]) / "data" / "raw"
