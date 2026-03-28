@@ -18,6 +18,56 @@ def register_runs_api(
     def _now_iso():
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+    def _job_info(j) -> dict:
+        """Extract useful info from an RQ job."""
+        info = {
+            "id": j.id,
+            "description": j.description or "",
+            "section": (j.description or "").split(":")[0].strip(),
+            "action": (j.description or "").split(":")[-1].strip(),
+            "status": "unknown",
+            "enqueued_at": "",
+            "started_at": "",
+            "ended_at": "",
+        }
+        # Safe accessors
+        try:
+            info["status"] = j.get_status()
+        except Exception:
+            pass
+        try:
+            info["enqueued_at"] = j.enqueued_at.isoformat() if j.enqueued_at else ""
+        except Exception:
+            pass
+        try:
+            info["started_at"] = j.started_at.isoformat() if j.started_at else ""
+        except Exception:
+            pass
+        try:
+            info["ended_at"] = j.ended_at.isoformat() if j.ended_at else ""
+        except Exception:
+            pass
+        try:
+            info["meta"] = dict(j.meta) if j.meta else {}
+        except Exception:
+            info["meta"] = {}
+        try:
+            if j.result is not None:
+                if isinstance(j.result, dict):
+                    info["result"] = {k: str(v)[:200] for k, v in j.result.items()}
+                elif isinstance(j.result, bytes):
+                    info["result"] = f"[binary {len(j.result)} bytes]"
+                else:
+                    info["result"] = str(j.result)[:500]
+        except Exception:
+            info["result"] = "[unable to read result]"
+        try:
+            if j.exc_info:
+                info["error"] = str(j.exc_info)[-500:]
+        except Exception:
+            pass
+        return info
+
     def _enqueue(task_name, kwargs, description):
         queue = get_queue_conn()
         job = queue.enqueue(
@@ -219,123 +269,69 @@ def register_runs_api(
     @api_runs.get("/api/jobs")
     def api_jobs():
         jobs = []
+        workers = []
         try:
             queue = Queue(connection=redis_conn)
 
-            # In-memory history
-            for rec in job_history[:100]:
-                jobs.append(
-                    {
-                        "id": rec.get("id", "?"),
-                        "section": rec.get("section", "?"),
-                        "action": rec.get("action", "?"),
-                        "status": rec.get("status", "?"),
-                        "enqueued_at": rec.get("enqueued_at", ""),
-                        "source": "history",
-                    }
-                )
+            # Collect all RQ job IDs from all registries
+            seen_ids = set()
 
-            # RQ queued jobs
+            def _add_rq_job(jid, status_override=None):
+                if jid in seen_ids:
+                    return
+                seen_ids.add(jid)
+                try:
+                    j = queue.fetch_job(jid)
+                    if j:
+                        info = _job_info(j)
+                        if status_override:
+                            info["status"] = status_override
+                        jobs.append(info)
+                except Exception:
+                    jobs.append(
+                        {
+                            "id": jid,
+                            "section": "unknown",
+                            "action": "unknown",
+                            "status": status_override or "unknown",
+                            "enqueued_at": "",
+                            "meta": {},
+                            "error": "[job data unreadable]",
+                        }
+                    )
+
             for jid in queue.get_job_ids():
-                j = queue.fetch_job(jid)
-                if j:
-                    jobs.append(
-                        {
-                            "id": jid,
-                            "section": (j.description or "").split(":")[0].strip(),
-                            "action": (j.description or "").split(":")[-1].strip(),
-                            "status": "queued",
-                            "enqueued_at": j.enqueued_at.isoformat()
-                            if j.enqueued_at
-                            else "",
-                            "source": "rq",
-                        }
-                    )
-
-            # RQ started (running) jobs
+                _add_rq_job(jid, "queued")
             for jid in queue.started_job_registry.get_job_ids():
-                j = queue.fetch_job(jid)
-                if j:
-                    jobs.append(
-                        {
-                            "id": jid,
-                            "section": (j.description or "").split(":")[0].strip(),
-                            "action": (j.description or "").split(":")[-1].strip(),
-                            "status": "running",
-                            "enqueued_at": j.enqueued_at.isoformat()
-                            if j.enqueued_at
-                            else "",
-                            "started_at": j.started_at.isoformat()
-                            if j.started_at
-                            else "",
-                            "source": "rq",
-                        }
-                    )
+                _add_rq_job(jid, "running")
+            for jid in queue.finished_job_registry.get_job_ids()[:50]:
+                _add_rq_job(jid, "finished")
+            for jid in queue.failed_job_registry.get_job_ids()[:50]:
+                _add_rq_job(jid, "failed")
 
-            # RQ finished jobs
-            for jid in queue.finished_job_registry.get_job_ids()[:30]:
-                j = queue.fetch_job(jid)
-                if j:
-                    jobs.append(
-                        {
-                            "id": jid,
-                            "section": (j.description or "").split(":")[0].strip(),
-                            "action": (j.description or "").split(":")[-1].strip(),
-                            "status": "finished",
-                            "enqueued_at": j.enqueued_at.isoformat()
-                            if j.enqueued_at
-                            else "",
-                            "ended_at": j.ended_at.isoformat() if j.ended_at else "",
-                            "source": "rq",
-                        }
-                    )
-
-            # RQ failed jobs
-            for jid in queue.failed_job_registry.get_job_ids()[:30]:
-                j = queue.fetch_job(jid)
-                if j:
-                    jobs.append(
-                        {
-                            "id": jid,
-                            "section": (j.description or "").split(":")[0].strip(),
-                            "action": (j.description or "").split(":")[-1].strip(),
-                            "status": "failed",
-                            "enqueued_at": j.enqueued_at.isoformat()
-                            if j.enqueued_at
-                            else "",
-                            "ended_at": j.ended_at.isoformat() if j.ended_at else "",
-                            "error": str(j.exc_info)[:200] if j.exc_info else "",
-                            "source": "rq",
-                        }
-                    )
-
-            # Workers info
-            workers = []
-            for w in Worker.all(connection=redis_conn):
-                workers.append(
-                    {
-                        "name": w.name.split(".")[0][:12],
-                        "state": w.get_state(),
-                        "current_job": w.get_current_job_id(),
-                    }
-                )
+            # Workers
+            try:
+                for w in Worker.all(connection=redis_conn):
+                    try:
+                        workers.append(
+                            {
+                                "name": w.name.split(".")[0][:12],
+                                "state": w.get_state(),
+                                "current_job": w.get_current_job_id(),
+                            }
+                        )
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
         except Exception as e:
             return jsonify(jobs=jobs, workers=[], error=str(e))
 
-        # Deduplicate by id, prefer rq source
-        seen = {}
-        for j in jobs:
-            jid = j["id"]
-            if jid not in seen or j.get("source") == "rq":
-                seen[jid] = j
+        # Sort by enqueued time
+        jobs.sort(key=lambda x: x.get("enqueued_at", ""), reverse=True)
 
-        return jsonify(
-            jobs=sorted(
-                seen.values(), key=lambda x: x.get("enqueued_at", ""), reverse=True
-            ),
-            workers=workers,
-        )
+        return jsonify(jobs=jobs[:100], workers=workers)
 
     # ── Data Dirs ────────────────────────────────────────
 

@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from rq import get_current_job
+
 from modules.download_progress import (
     DownloadProgress,
     bytes_to_human,
@@ -14,11 +16,25 @@ from modules.drive_oauth import download_file, get_drive_service, list_folder_fi
 from modules.merge_geotiffs import ingest_downloaded_geotiffs
 
 
+def _set_progress(step: str, pct: int | None = None) -> None:
+    """Update job meta with progress info."""
+    try:
+        job = get_current_job()
+        if job:
+            job.meta["step"] = step
+            if pct is not None:
+                job.meta["progress"] = pct
+            job.save_meta()
+    except Exception:
+        pass
+
+
 def run_script(
     cmd: list[str],
     cwd: str,
     env_overrides: dict[str, str] | None = None,
 ) -> dict:
+    _set_progress("running script", 10)
     env = os.environ.copy()
     if env_overrides:
         env.update(env_overrides)
@@ -30,13 +46,19 @@ def run_script(
         check=False,
         env=env,
     )
-    return {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr}
+    _set_progress("done" if proc.returncode == 0 else "failed", 100)
+    return {
+        "returncode": proc.returncode,
+        "stdout": proc.stdout[-2000:],
+        "stderr": proc.stderr[-2000:],
+    }
 
 
 def task_run_script_for_user(kwargs: dict[str, Any]) -> dict:
     user_id = kwargs.pop("user_id", None)
     cmd = kwargs.pop("cmd")
     cwd = kwargs.pop("cwd", ".")
+    _set_progress(f"preparing: {cmd[0] if cmd else '?'}", 0)
     env_overrides: dict[str, str] = {}
     if user_id:
         from modules.persistence.sqlite_store import SQLiteStore
@@ -53,19 +75,18 @@ def task_build_dataset(kwargs: dict[str, Any]) -> None:
 
     kwargs.pop("oauth_token", None)
     kwargs.pop("user_id", None)
-
-    # Convert string paths back to Path objects
+    _set_progress("building dataset", 0)
     kwargs["input_dir"] = Path(kwargs["input_dir"])
     kwargs["output_dir"] = Path(kwargs["output_dir"])
     run_build(**kwargs)
+    _set_progress("done", 100)
 
 
 def task_run_matrix(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.training_matrix_service import run_matrix
 
     kwargs.pop("user_id", None)
-
-    # Convert concrete string paths back to Path objects, leave templates as strings
+    _set_progress("running training matrix", 0)
     kwargs["runs_dir"] = Path(kwargs["runs_dir"])
     if kwargs.get("index_csv"):
         kwargs["index_csv"] = Path(kwargs["index_csv"])
@@ -73,6 +94,7 @@ def task_run_matrix(kwargs: dict[str, Any]) -> dict[str, Any]:
         kwargs["root_dir"] = Path(kwargs["root_dir"])
     kwargs["train_script"] = Path(kwargs["train_script"])
     result = run_matrix(**kwargs)
+    _set_progress("done", 100)
     return {"failures": result}
 
 
@@ -80,15 +102,16 @@ def task_run_eval(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.evaluation_service import run_evaluation
 
     kwargs.pop("user_id", None)
-
-    # Convert string paths back to Path objects
+    _set_progress("running evaluation", 0)
     kwargs["summary_csv"] = Path(kwargs["summary_csv"])
     kwargs["output_csv"] = Path(kwargs["output_csv"])
     kwargs["best_json"] = Path(kwargs["best_json"])
-
     try:
-        return run_evaluation(**kwargs)
+        result = run_evaluation(**kwargs)
+        _set_progress("done", 100)
+        return result
     except SystemExit as e:
+        _set_progress("failed", 100)
         return {"error": str(e)}
 
 
@@ -96,11 +119,12 @@ def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
     from modules.services.inventory_service import run_inventory
 
     kwargs.pop("user_id", None)
-
-    # Convert string paths back to Path objects
+    _set_progress("refreshing inventory", 0)
     kwargs["input_dir"] = Path(kwargs["input_dir"])
     kwargs["output_dir"] = Path(kwargs["output_dir"])
-    return run_inventory(**kwargs)
+    result = run_inventory(**kwargs)
+    _set_progress("done", 100)
+    return result
 
 
 def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -118,6 +142,7 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
         token_json = Path(os.environ.get("OAUTH_TOKEN_CACHE", "token.json"))
         token_json.write_text(json.dumps(oauth_token), encoding="utf-8")
 
+    _set_progress("connecting to drive", 0)
     svc = get_drive_service(
         credentials_json=credentials_json,
         token_json=token_json,
@@ -128,18 +153,18 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     total_size = estimate_download_size([{"size": f.size or 0} for f in tif_files])
 
     save_dir.mkdir(parents=True, exist_ok=True)
-
-    print(
-        f"Downloading {len(tif_files)} files ({bytes_to_human(total_size)}) to {save_dir}"
-    )
+    _set_progress(f"downloading {len(tif_files)} files", 5)
 
     with DownloadProgress(total_bytes=total_size, total_files=len(tif_files)) as prog:
-        for f in tif_files:
+        for i, f in enumerate(tif_files):
             dst = save_dir / f.name
             if dst.exists() and dst.stat().st_size == (f.size or 0):
                 prog.on_chunk(f.size or 0)
                 prog.on_file_done(f.name, f.size or 0)
                 continue
+            _set_progress(
+                f"downloading {f.name}", int(5 + 85 * i / max(len(tif_files), 1))
+            )
             prog.on_file_start(f.name, f.size or 0)
             download_file(
                 svc,
@@ -149,6 +174,7 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
             )
             prog.on_file_done(f.name, f.size or 0)
 
+    _set_progress("ingesting", 95)
     result: dict[str, Any] = {"downloaded": len(tif_files), "total_size": total_size}
 
     try:
@@ -163,5 +189,5 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
         }
 
     result.update(ingest_summary)
-
+    _set_progress("done", 100)
     return result

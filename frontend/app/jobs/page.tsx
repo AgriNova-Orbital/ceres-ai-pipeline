@@ -9,11 +9,13 @@ interface Job {
   section: string;
   action: string;
   status: string;
+  description?: string;
   enqueued_at: string;
   started_at?: string;
   ended_at?: string;
+  meta?: Record<string, unknown>;
+  result?: Record<string, string> | string;
   error?: string;
-  source?: string;
 }
 
 interface Worker {
@@ -23,18 +25,17 @@ interface Worker {
 }
 
 const statusColors: Record<string, string> = {
-  enqueued: "bg-yellow-100 text-yellow-800",
   queued: "bg-yellow-100 text-yellow-800",
   running: "bg-blue-100 text-blue-800",
   finished: "bg-green-100 text-green-800",
   failed: "bg-red-100 text-red-800",
-  unknown: "bg-gray-100 text-gray-800",
 };
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [filter, setFilter] = useState("all");
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -49,14 +50,14 @@ export default function JobsPage() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 3000);
+    const id = setInterval(load, 2000);
     return () => clearInterval(id);
   }, []);
 
   const filtered = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
   const counts = {
     all: jobs.length,
-    queued: jobs.filter((j) => j.status === "queued" || j.status === "enqueued").length,
+    queued: jobs.filter((j) => j.status === "queued").length,
     running: jobs.filter((j) => j.status === "running").length,
     finished: jobs.filter((j) => j.status === "finished").length,
     failed: jobs.filter((j) => j.status === "failed").length,
@@ -68,7 +69,6 @@ export default function JobsPage() {
         <div className="flex items-center gap-4">
           <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Jobs Monitor</h1>
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Auto-refresh 3s</span>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={load} className="text-sm px-3 py-1 border rounded hover:bg-gray-50">Refresh</button>
@@ -86,7 +86,7 @@ export default function JobsPage() {
             <div className="flex gap-3 flex-wrap">
               {workers.map((w) => (
                 <div key={w.name} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded border">
-                  <span className={`w-2 h-2 rounded-full ${w.state === "busy" ? "bg-yellow-500" : "bg-green-500"}`} />
+                  <span className={`w-2 h-2 rounded-full ${w.state === "busy" ? "bg-yellow-500 animate-pulse" : "bg-green-500"}`} />
                   <span className="font-mono text-xs">{w.name}</span>
                   <span className={`text-xs px-1.5 py-0.5 rounded ${w.state === "busy" ? "bg-yellow-100 text-yellow-700" : "text-gray-400"}`}>
                     {w.state}
@@ -116,43 +116,69 @@ export default function JobsPage() {
           ))}
         </div>
 
-        {/* Jobs Table */}
+        {/* Jobs */}
         <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
           {loading ? (
             <p className="p-8 text-center text-gray-400">Loading...</p>
           ) : filtered.length === 0 ? (
             <p className="p-8 text-center text-gray-400">No jobs found</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr className="text-left text-gray-500">
-                  <th className="px-4 py-3">Job ID</th>
-                  <th className="px-4 py-3">Section</th>
-                  <th className="px-4 py-3">Action</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Enqueued</th>
-                  <th className="px-4 py-3">Ended</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((j) => (
-                  <tr key={j.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-xs">{j.id.slice(0, 12)}...</td>
-                    <td className="px-4 py-3 font-medium">{j.section}</td>
-                    <td className="px-4 py-3 text-gray-500">{j.action}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[j.status] || statusColors.unknown}`}>
-                        {j.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">{formatTime(j.enqueued_at)}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs">
-                      {j.ended_at ? formatTime(j.ended_at) : j.started_at ? formatTime(j.started_at) : "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="divide-y">
+              {filtered.map((j) => (
+                <div key={j.id} className="hover:bg-gray-50">
+                  <button
+                    onClick={() => setExpanded(expanded === j.id ? null : j.id)}
+                    className="w-full px-4 py-3 flex items-center gap-4 text-left text-sm"
+                  >
+                    <span className="font-mono text-xs text-gray-400 w-20">{j.id.slice(0, 8)}</span>
+                    <span className="font-medium w-24">{j.section}</span>
+                    <span className="text-gray-500 w-32 truncate">{j.action}</span>
+                    <StatusBadge status={j.status} />
+                    {j.status === "running" && j.meta?.progress != null && (
+                      <ProgressBar pct={Number(j.meta.progress)} step={String(j.meta.step ?? "")} />
+                    )}
+                    {j.status === "queued" && (
+                      <span className="text-xs text-gray-400 italic">waiting for worker</span>
+                    )}
+                    <span className="text-gray-400 text-xs ml-auto">{formatTime(j.enqueued_at)}</span>
+                    <span className="text-gray-300">{expanded === j.id ? "▲" : "▼"}</span>
+                  </button>
+
+                  {expanded === j.id && (
+                    <div className="px-4 pb-4 pl-32 space-y-2 text-sm">
+                      {String(j.meta?.step ?? "") && (
+                        <InfoRow label="Current Step" value={String(j.meta?.step ?? "")} />
+                      )}
+                      {j.meta?.progress != null && Number(j.meta?.progress) > 0 && (
+                        <InfoRow label="Progress" value={`${Number(j.meta?.progress)}%`} />
+                      )}
+                      {j.started_at && (
+                        <InfoRow label="Started" value={formatTime(j.started_at)} />
+                      )}
+                      {j.ended_at && (
+                        <InfoRow label="Ended" value={formatTime(j.ended_at)} />
+                      )}
+                      {j.result && (
+                        <div>
+                          <p className="text-gray-500 text-xs font-medium mb-1">Result:</p>
+                          <pre className="bg-gray-50 p-2 rounded text-xs overflow-x-auto max-h-32">
+                            {typeof j.result === "string" ? j.result : JSON.stringify(j.result, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                      {j.error && (
+                        <div>
+                          <p className="text-red-600 text-xs font-medium mb-1">Error:</p>
+                          <pre className="bg-red-50 p-2 rounded text-xs text-red-700 overflow-x-auto max-h-40 whitespace-pre-wrap">
+                            {j.error}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </main>
@@ -160,11 +186,48 @@ export default function JobsPage() {
   );
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    queued: "bg-yellow-100 text-yellow-800",
+    running: "bg-blue-100 text-blue-800 animate-pulse",
+    finished: "bg-green-100 text-green-800",
+    failed: "bg-red-100 text-red-800",
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${colors[status] || "bg-gray-100 text-gray-600"}`}>
+      {status}
+    </span>
+  );
+}
+
+function ProgressBar({ pct, step }: { pct: number; step?: string }) {
+  return (
+    <div className="flex items-center gap-2 flex-1 max-w-xs">
+      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-blue-500 rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
+      <span className="text-xs text-gray-500 whitespace-nowrap">{pct}%</span>
+      {step && <span className="text-xs text-gray-400 truncate max-w-24">{step}</span>}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-gray-500 text-xs w-20">{label}:</span>
+      <span className="text-gray-800 text-xs">{value}</span>
+    </div>
+  );
+}
+
 function formatTime(iso: string): string {
   if (!iso) return "-";
   try {
-    const d = new Date(iso);
-    return d.toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return new Date(iso).toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   } catch {
     return iso;
   }
