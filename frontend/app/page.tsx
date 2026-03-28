@@ -1,3 +1,5 @@
+import LogoutButton from "@/components/LogoutButton";
+
 export default function Home() {
   return (
     <div className="min-h-screen p-8">
@@ -7,14 +9,7 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-primary">Ceres AI Pipeline</h1>
             <p className="text-gray-500">Wheat Risk WebUI</p>
           </div>
-          <form action="/api/auth/logout" method="post">
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100"
-            >
-              Logout
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </header>
 
