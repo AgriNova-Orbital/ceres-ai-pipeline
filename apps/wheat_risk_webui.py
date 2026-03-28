@@ -36,6 +36,7 @@ from flask import (
 # from modules.google_user_oauth import build_google_credentials_from_oauth_token
 from modules.persistence.sqlite_store import SQLiteStore
 from apps.api_auth import register_auth_api
+from apps.api_admin import register_admin_api
 
 
 _FAKE_REDIS_SERVER = None
@@ -257,7 +258,10 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             return None
         if request.endpoint is None:
             return None
-        if request.endpoint and request.endpoint.startswith("api_auth."):
+        if request.endpoint and (
+            request.endpoint.startswith("api_auth.")
+            or request.endpoint.startswith("api_admin.")
+        ):
             return None
         if "user" not in session:
             return redirect(url_for("login"))
@@ -266,6 +270,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         return None
 
     register_auth_api(app, sqlite_store)
+    register_admin_api(app, sqlite_store, get_redis_conn(), app.config["JOB_HISTORY"])
 
     def get_raw_data_dirs() -> list[str]:
         raw_base = Path(app.config["REPO_ROOT"]) / "data" / "raw"
