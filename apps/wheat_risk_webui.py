@@ -35,6 +35,7 @@ from flask import (
 # )
 # from modules.google_user_oauth import build_google_credentials_from_oauth_token
 from modules.persistence.sqlite_store import SQLiteStore
+from apps.api_auth import register_auth_api
 
 
 _FAKE_REDIS_SERVER = None
@@ -251,16 +252,20 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.before_request
     def require_login() -> Response | None:
-        allowed = {"login", "logout", "change_password", "static"}
+        allowed = {"login", "logout", "change_password", "static", "api_auth"}
         if request.endpoint in allowed:
             return None
         if request.endpoint is None:
+            return None
+        if request.endpoint and request.endpoint.startswith("api_auth."):
             return None
         if "user" not in session:
             return redirect(url_for("login"))
         if sqlite_store.is_default_password() and request.endpoint != "change_password":
             return redirect(url_for("change_password"))
         return None
+
+    register_auth_api(app, sqlite_store)
 
     def get_raw_data_dirs() -> list[str]:
         raw_base = Path(app.config["REPO_ROOT"]) / "data" / "raw"
