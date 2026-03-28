@@ -288,17 +288,7 @@ def register_runs_api(
                             info["status"] = status_override
                         jobs.append(info)
                 except Exception:
-                    jobs.append(
-                        {
-                            "id": jid,
-                            "section": "unknown",
-                            "action": "unknown",
-                            "status": status_override or "unknown",
-                            "enqueued_at": "",
-                            "meta": {},
-                            "error": "[job data unreadable]",
-                        }
-                    )
+                    pass
 
             for jid in queue.get_job_ids():
                 _add_rq_job(jid, "queued")

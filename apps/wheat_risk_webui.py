@@ -292,7 +292,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     register_runs_api(
         app,
         sqlite_store,
-        get_redis_conn(),
+        get_queue_redis_conn(),
         app.config["JOB_HISTORY"],
         get_queue_conn,
         get_raw_data_dirs,
