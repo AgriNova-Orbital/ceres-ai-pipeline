@@ -167,12 +167,22 @@ def register_runs_api(
         max_patches = data.get("max_patches", "12000")
 
         if action == "dry_run":
-            cmd = ["python", "-u", "scripts/build_staged_dataset.py", "--dry-run"]
+            cmd = [
+                "python",
+                "-u",
+                "scripts/build_npz_dataset_from_geotiffs.py",
+                "--input-dir",
+                str(root / raw_dir),
+                "--output-dir",
+                str(root / "data" / "wheat_risk" / "staged" / f"L{level}"),
+                "--max-patches",
+                "1",
+            ]
         else:
             cmd = [
                 "python",
                 "-u",
-                "scripts/build_staged_dataset.py",
+                "scripts/build_npz_dataset_from_geotiffs.py",
                 "--input-dir",
                 str(root / raw_dir),
                 "--output-dir",
@@ -255,7 +265,21 @@ def register_runs_api(
     def api_run_eval():
         data = request.get_json(silent=True) or {}
         root = Path(app.config["REPO_ROOT"])
-        cmd = ["python", "-u", "scripts/evaluate_model.py"]
+        cmd = [
+            "python",
+            "-u",
+            "scripts/eval_staged_training_matrix.py",
+            "--index-csv-template",
+            data.get(
+                "index_csv_template", "./data/wheat_risk/staged/L{level}/index.csv"
+            ),
+            "--root-dir-template",
+            data.get("root_dir_template", "./data/wheat_risk/staged/L{level}"),
+            "--output-csv",
+            "runs/eval_metrics.csv",
+            "--best-json",
+            "runs/best_model.json",
+        ]
 
         job_id = _enqueue(
             "modules.jobs.tasks.task_run_script_for_user",
