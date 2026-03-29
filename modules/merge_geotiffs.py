@@ -18,6 +18,7 @@ _PAT_WEEK_TILE = re.compile(
 )
 _PAT_DATA = re.compile(r"^fr_wheat_feat_(\d{4})_data_(.+)\.tif(?:f)?$", re.IGNORECASE)
 _PAT_WEEK_IN_SUFFIX = re.compile(r"\bW(\d{2})\b", re.IGNORECASE)
+_PAT_NUM_SUFFIX = re.compile(r"^(\d+)$")
 _PAT_WEEK_KEY = re.compile(r"^\d{4}W\d{2}$", re.IGNORECASE)
 _TMP_DIR_NAME = "._ingest_tmp"
 
@@ -36,6 +37,11 @@ def _group_key(name: str) -> str | None:
         m2 = _PAT_WEEK_IN_SUFFIX.search(suffix)
         if m2:
             return f"{year}W{m2.group(1)}"
+        # data_001 → 2025W01, data_046 → 2025W46
+        m3 = _PAT_NUM_SUFFIX.match(suffix)
+        if m3:
+            week_num = int(m3.group(1))
+            return f"{year}W{week_num:02d}"
         return f"{year}_{suffix}"
     return None
 

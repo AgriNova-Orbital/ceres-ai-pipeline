@@ -6,6 +6,7 @@ const sections = [
   { title: "Jobs Monitor", desc: "All submitted and completed jobs", href: "/jobs" },
   { title: "Settings", desc: "Google OAuth, configuration", href: "/settings" },
   { title: "Data Browser", desc: "Browse raw GeoTIFFs, patches, runs, reports", href: "/data" },
+  { title: "Data Ingest", desc: "Normalize and merge weekly GeoTIFFs", href: "/ingest" },
   { title: "Google Drive", desc: "Browse and download from Google Drive", href: "/drive" },
   { title: "Downloader", desc: "Download weekly Sentinel-2 rasters", href: "/downloader" },
   { title: "Build Dataset", desc: "Build staged patches from raw data", href: "/build" },

@@ -436,4 +436,36 @@ def register_runs_api(
                     )
         return jsonify(runs=entries)
 
+    @api_runs.get("/api/ingest/status")
+    def api_ingest_status():
+        from modules.merge_geotiffs import group_split_files, _PAT_WEEK
+
+        root = Path(app.config["REPO_ROOT"])
+        raw_base = root / "data" / "raw"
+        result = {}
+        if raw_base.exists():
+            for d in sorted(raw_base.iterdir()):
+                if not d.is_dir():
+                    continue
+                groups = group_split_files(d)
+                canonical = 0
+                single = 0
+                multi = 0
+                for key, files in groups.items():
+                    if any(_PAT_WEEK.match(f.name) for f in files):
+                        canonical += 1
+                    elif len(files) == 1:
+                        single += 1
+                    else:
+                        multi += 1
+                result[d.name] = {
+                    "path": str(d),
+                    "total_files": len(list(d.glob("*.tif*"))),
+                    "total_groups": len(groups),
+                    "canonical": canonical,
+                    "needs_normalize": single,
+                    "needs_merge": multi,
+                }
+        return jsonify(datasets=result)
+
     app.register_blueprint(api_runs)
