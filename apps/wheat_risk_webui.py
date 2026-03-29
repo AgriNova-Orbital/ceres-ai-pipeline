@@ -255,7 +255,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.before_request
     def require_login() -> Response | None:
-        allowed = {"login", "logout", "change_password", "static", "api_auth"}
+        allowed = {
+            "login",
+            "logout",
+            "change_password",
+            "static",
+            "api_auth",
+            "drive_list",
+            "drive_estimate",
+            "drive_download",
+        }
         if request.endpoint in allowed:
             return None
         if request.endpoint is None:
@@ -692,19 +701,28 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         flash("Evaluation enqueued.", "success")
         return redirect(url_for("home"))
 
-    # WIP: OAuth - Drive service requires Google OAuth
     def _build_drive_service() -> Any:
-        return None
-        # WIP: OAuth
-        # google_token = session.get("google_token")
-        # if not google_token:
-        #     return None
-        # try:
-        #     import googleapiclient.discovery
-        #     creds = build_google_credentials_from_oauth_token(google_token)
-        #     return googleapiclient.discovery.build("drive", "v3", credentials=creds)
-        # except Exception:
-        #     return None
+        # Read OAuth token from SQLite (stored by /api/oauth/callback)
+        try:
+            from modules.google_user_oauth import (
+                build_google_credentials_from_oauth_token,
+            )
+            import googleapiclient.discovery
+
+            # Get the most recent token from any user
+            with sqlite_store._connect() as conn:
+                row = conn.execute(
+                    "SELECT token_json FROM user_oauth_tokens ORDER BY updated_at DESC LIMIT 1"
+                ).fetchone()
+            if not row or not row["token_json"]:
+                return None
+            import json as _json
+
+            token = _json.loads(row["token_json"])
+            creds = build_google_credentials_from_oauth_token(token)
+            return googleapiclient.discovery.build("drive", "v3", credentials=creds)
+        except Exception:
+            return None
 
     @app.get("/api/drive/list")
     def drive_list() -> Response:
