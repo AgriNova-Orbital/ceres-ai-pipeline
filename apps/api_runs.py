@@ -353,4 +353,87 @@ def register_runs_api(
     def api_data_dirs():
         return jsonify(dirs=get_raw_data_dirs())
 
+    @api_runs.get("/api/scan/raw")
+    def api_scan_raw():
+        limit = int(request.args.get("limit", "200"))
+        root = Path(app.config["REPO_ROOT"])
+        raw_base = root / "data" / "raw"
+        files = []
+        if raw_base.exists():
+            for p in sorted(raw_base.rglob("*.tif*")):
+                if p.is_file():
+                    files.append(
+                        {
+                            "path": str(p.relative_to(root)),
+                            "name": p.name,
+                            "size_mb": round(p.stat().st_size / 1e6, 1),
+                            "dir": str(p.parent.relative_to(root)),
+                        }
+                    )
+                if len(files) >= limit:
+                    break
+        return jsonify(files=files, total=len(files))
+
+    @api_runs.get("/api/scan/patches")
+    def api_scan_patches():
+        limit = int(request.args.get("limit", "200"))
+        root = Path(app.config["REPO_ROOT"])
+        candidates = [root / "data" / "wheat_risk", root / "runs"]
+        files = []
+        for base in candidates:
+            if not base.exists():
+                continue
+            for p in sorted(base.rglob("*.npz")):
+                if p.is_file():
+                    files.append(
+                        {
+                            "path": str(p.relative_to(root)),
+                            "name": p.name,
+                            "size_mb": round(p.stat().st_size / 1e6, 1),
+                            "dir": str(p.parent.relative_to(root)),
+                        }
+                    )
+                if len(files) >= limit:
+                    break
+        return jsonify(files=files, total=len(files))
+
+    @api_runs.get("/api/scan/reports")
+    def api_scan_reports():
+        root = Path(app.config["REPO_ROOT"])
+        reports_dir = root / "reports"
+        files = []
+        if reports_dir.exists():
+            for p in sorted(reports_dir.rglob("*")):
+                if p.is_file():
+                    files.append(
+                        {
+                            "path": str(p.relative_to(root)),
+                            "name": p.name,
+                            "size_mb": round(p.stat().st_size / 1e6, 1),
+                        }
+                    )
+        return jsonify(files=files, total=len(files))
+
+    @api_runs.get("/api/scan/runs")
+    def api_scan_runs():
+        root = Path(app.config["REPO_ROOT"])
+        runs_dir = root / "runs"
+        entries = []
+        if runs_dir.exists():
+            for p in sorted(runs_dir.iterdir()):
+                if p.is_dir():
+                    sub_files = list(p.rglob("*"))
+                    entries.append(
+                        {
+                            "name": p.name,
+                            "files": len([f for f in sub_files if f.is_file()]),
+                            "size_mb": round(
+                                sum(f.stat().st_size for f in sub_files if f.is_file())
+                                / 1e6,
+                                1,
+                            ),
+                        }
+                    )
+        return jsonify(runs=entries)
+
     app.register_blueprint(api_runs)
