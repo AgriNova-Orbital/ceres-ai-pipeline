@@ -14,37 +14,43 @@ interface DriveFile {
 export default function DrivePage() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [error, setError] = useState("");
-  const [folderId, setFolderId] = useState("");
+  const [folderId, setFolderId] = useState("root");
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(false);
 
   async function checkStatus() {
     try {
-      const res = await fetch("/api/drive/list?id=root");
-      if (res.ok) {
-        setConnected(true);
-        const data = await res.json();
-        setFiles(data.files || []);
-      } else {
-        const data = await res.json();
-        setConnected(false);
-        setError(data.error || "Not connected");
+      const res = await fetch("/api/oauth/status");
+      const data = await res.json();
+      setConnected(data.configured);
+      if (data.configured) {
+        listFolder("root");
       }
     } catch {
       setConnected(false);
-      setError("Cannot reach API");
     }
   }
 
-  async function listFolder() {
-    if (!folderId) return;
+  async function listFolder(id: string) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/drive/list?id=${folderId}`);
-      const data = await res.json();
-      setFiles(data.files || []);
-    } catch { /* ignore */ }
+      const res = await fetch(`/api/drive/list?id=${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFiles(data.files || []);
+        setError("");
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to list files");
+      }
+    } catch {
+      setError("Connection error");
+    }
     setLoading(false);
+  }
+
+  function handleConnect() {
+    window.location.href = "/api/oauth/login";
   }
 
   useEffect(() => { checkStatus(); }, []);
@@ -59,71 +65,84 @@ export default function DrivePage() {
         <LogoutButton />
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Status */}
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-lg font-semibold mb-4">Connection Status</h2>
-          {connected === null ? (
-            <p className="text-gray-400">Checking...</p>
-          ) : connected ? (
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-green-500 rounded-full" />
-              <span className="text-green-700 font-medium">Connected</span>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-red-500 rounded-full" />
-                <span className="text-red-700 font-medium">Not Connected</span>
-              </div>
-              <p className="text-sm text-gray-500">{error}</p>
-              <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-sm text-yellow-800">
-                <p className="font-medium mb-1">Google OAuth Required</p>
-                <p>Drive integration requires Google OAuth, which is currently in WIP status.</p>
-                <p className="mt-2">To enable: upload a <code className="bg-yellow-100 px-1 rounded">client_secret.json</code> and configure OAuth.</p>
-              </div>
-            </div>
-          )}
-        </div>
+      <main className="max-w-5xl mx-auto p-6 space-y-6">
+        {/* Not connected */}
+        {connected === false && (
+          <div className="bg-white rounded-lg shadow-sm border p-8 text-center space-y-4">
+            <div className="text-4xl">Google Drive</div>
+            <p className="text-gray-500">Connect your Google account to browse and download files.</p>
+            <button onClick={handleConnect}
+              className="px-6 py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-medium flex items-center gap-2 mx-auto">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+              </svg>
+              Connect to Google Drive
+            </button>
+            <p className="text-xs text-gray-400">
+              Need to configure first? Go to <Link href="/settings" className="text-primary hover:underline">Settings</Link>
+            </p>
+          </div>
+        )}
 
-        {/* File Browser (only if connected) */}
+        {/* Connected - File Browser */}
         {connected && (
-          <div className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Browse Files</h2>
-            <div className="flex gap-2">
+          <>
+            {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>}
+
+            <div className="bg-white rounded-lg shadow-sm border p-4 flex gap-2">
               <input
                 value={folderId}
                 onChange={(e) => setFolderId(e.target.value)}
-                placeholder="Google Drive Folder ID"
+                placeholder="Google Drive Folder ID (or 'root')"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
               />
-              <button onClick={listFolder} disabled={loading}
+              <button onClick={() => listFolder(folderId)} disabled={loading}
                 className="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-dark disabled:opacity-50">
-                {loading ? "Loading..." : "List"}
+                {loading ? "Loading..." : "Browse"}
               </button>
             </div>
 
-            {files.length > 0 && (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr className="text-left text-gray-500">
-                    <th className="px-4 py-2">Name</th>
-                    <th className="px-4 py-2">Type</th>
-                    <th className="px-4 py-2">Size</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {files.map((f) => (
-                    <tr key={f.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-mono text-xs">{f.name}</td>
-                      <td className="px-4 py-2 text-xs text-gray-400">{f.mimeType?.split(".").pop()}</td>
-                      <td className="px-4 py-2 text-xs">{f.size_mb} MB</td>
+            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+              {files.length === 0 ? (
+                <p className="p-8 text-center text-gray-400">{loading ? "Loading..." : "No files in this folder"}</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr className="text-left text-gray-500">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Size</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+                  </thead>
+                  <tbody className="divide-y">
+                    {files.map((f) => (
+                      <tr key={f.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2">
+                          {f.mimeType === "application/vnd.google-apps.folder" ? (
+                            <button onClick={() => { setFolderId(f.id); listFolder(f.id); }}
+                              className="text-primary hover:underline font-mono text-xs">
+                              {f.name}
+                            </button>
+                          ) : (
+                            <span className="font-mono text-xs">{f.name}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-gray-400">
+                          {f.mimeType?.split(".").pop() || f.mimeType?.split("/").pop()}
+                        </td>
+                        <td className="px-4 py-2 text-xs">{f.size_mb > 0 ? `${f.size_mb} MB` : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Checking */}
+        {connected === null && (
+          <p className="text-center text-gray-400 p-8">Checking connection...</p>
         )}
       </main>
     </div>

@@ -99,26 +99,18 @@ def register_oauth_api(app, sqlite_store) -> None:
         if not google_sub:
             return redirect("/login?error=no_userinfo")
 
-        # Store user in DB
+        # Store user in DB (for Drive access tracking)
         local_user = sqlite_store.get_or_create_user(
             google_sub=google_sub,
             email=email,
             display_name=str(display_name) if display_name else None,
         )
 
-        # Store token in DB (server-side, not session)
+        # Store token in DB (server-side, for Drive API access)
         sqlite_store.save_user_oauth_token(user_id=local_user["id"], token=token)
 
-        # Set session
-        session["user"] = {
-            "username": email or display_name or google_sub,
-            "oauth": True,
-        }
-
-        # Check if needs password change
-        if sqlite_store.is_default_password():
-            return redirect("/change-password")
-        return redirect("/")
+        # Redirect to Drive page (not login - OAuth is for Drive, not auth)
+        return redirect("/drive?connected=1")
 
     @api_oauth.get("/api/oauth/status")
     def oauth_status():
