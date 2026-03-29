@@ -38,6 +38,7 @@ from modules.persistence.sqlite_store import SQLiteStore
 from apps.api_auth import register_auth_api
 from apps.api_admin import register_admin_api
 from apps.api_runs import register_runs_api
+from apps.api_oauth import register_oauth_api
 
 
 _FAKE_REDIS_SERVER = None
@@ -263,6 +264,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             request.endpoint.startswith("api_auth.")
             or request.endpoint.startswith("api_admin.")
             or request.endpoint.startswith("api_runs.")
+            or request.endpoint.startswith("api_oauth.")
         ):
             return None
         if "user" not in session:
@@ -297,6 +299,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         get_queue_conn,
         get_raw_data_dirs,
     )
+    register_oauth_api(app, sqlite_store)
 
     def get_scanned_raw_tif_paths(limit: int = 100) -> list[str]:
         raw_base = Path(app.config["REPO_ROOT"]) / "data" / "raw"

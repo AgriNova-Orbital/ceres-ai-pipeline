@@ -4,6 +4,7 @@ import LogoutButton from "@/components/LogoutButton";
 const sections = [
   { title: "Admin Dashboard", desc: "System overview, workers, queue, storage", href: "/admin" },
   { title: "Jobs Monitor", desc: "All submitted and completed jobs", href: "/jobs" },
+  { title: "Settings", desc: "Google OAuth, configuration", href: "/settings" },
   { title: "Data Browser", desc: "Browse raw GeoTIFFs, patches, runs, reports", href: "/data" },
   { title: "Google Drive", desc: "Browse and download from Google Drive", href: "/drive" },
   { title: "Downloader", desc: "Download weekly Sentinel-2 rasters", href: "/downloader" },
