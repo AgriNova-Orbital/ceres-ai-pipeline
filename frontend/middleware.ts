@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/favicon.ico"];
+const PUBLIC_PATHS = ["/login", "/register", "/favicon.ico"];
 const API_PATHS = ["/api/", "/auth/"];
 
 export async function middleware(request: NextRequest) {

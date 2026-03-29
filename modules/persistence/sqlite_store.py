@@ -116,6 +116,18 @@ class SQLiteStore:
                 (_hash_password(new_password), _now_iso()),
             )
 
+    def set_admin(self, username: str, password: str) -> None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE app_settings
+                SET admin_username = ?, admin_password_hash = ?, updated_at = ?
+                WHERE id = 1
+                """,
+                (username, _hash_password(password), _now_iso()),
+            )
+
     def is_default_password(self) -> bool:
         self.ensure_schema()
         with self._connect() as conn:

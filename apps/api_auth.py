@@ -51,4 +51,26 @@ def register_auth_api(app, sqlite_store) -> None:
             requiresPasswordChange=sqlite_store.is_default_password(),
         )
 
+    @api_auth.get("/api/auth/status")
+    def api_auth_status():
+        return jsonify(
+            hasAdmin=not sqlite_store.is_default_password(),
+            needsSetup=sqlite_store.is_default_password(),
+        )
+
+    @api_auth.post("/api/auth/register")
+    def api_register():
+        data = request.get_json(silent=True) or {}
+        username = data.get("username", "").strip()
+        password = data.get("password", "")
+        if not username or not password:
+            return jsonify(error="Username and password required"), 400
+        if len(password) < 4:
+            return jsonify(error="Password must be at least 4 characters"), 400
+        if not sqlite_store.is_default_password() and "user" not in session:
+            return jsonify(error="Admin already exists. Login first."), 403
+        sqlite_store.set_admin(username, password)
+        session["user"] = {"username": username}
+        return jsonify(ok=True, user={"username": username})
+
     app.register_blueprint(api_auth)

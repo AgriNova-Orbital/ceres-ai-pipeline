@@ -12,22 +12,24 @@ interface DriveFile {
 }
 
 export default function DrivePage() {
-  const [connected, setConnected] = useState<boolean | null>(null);
+  const [configured, setConfigured] = useState<boolean | null>(null);
   const [error, setError] = useState("");
   const [folderId, setFolderId] = useState("root");
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMsg, setUploadMsg] = useState("");
 
   async function checkStatus() {
     try {
       const res = await fetch("/api/oauth/status");
       const data = await res.json();
-      setConnected(data.configured);
+      setConfigured(data.configured);
       if (data.configured) {
         listFolder("root");
       }
     } catch {
-      setConnected(false);
+      setConfigured(false);
     }
   }
 
@@ -42,6 +44,28 @@ export default function DrivePage() {
       } else {
         const data = await res.json();
         setError(data.error || "Failed to list files");
+      }
+    } catch {
+      setError("Connection error");
+    }
+    setLoading(false);
+  }
+
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!uploadFile) return;
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append("file", uploadFile);
+      form.append("redirect_base_url", typeof window !== "undefined" ? window.location.origin : "");
+      const res = await fetch("/api/oauth/upload-secret", { method: "POST", body: form });
+      const data = await res.json();
+      if (res.ok) {
+        setUploadMsg("Uploaded! Now click 'Connect to Google Drive' below.");
+        setConfigured(true);
+      } else {
+        setError(data.error || "Upload failed");
       }
     } catch {
       setError("Connection error");
@@ -66,45 +90,68 @@ export default function DrivePage() {
       </header>
 
       <main className="max-w-5xl mx-auto p-6 space-y-6">
-        {/* Not connected */}
-        {connected === false && (
-          <div className="bg-white rounded-lg shadow-sm border p-8 text-center space-y-4">
-            <div className="text-4xl">Google Drive</div>
-            <p className="text-gray-500">Connect your Google account to browse and download files.</p>
-            <button onClick={handleConnect}
-              className="px-6 py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-medium flex items-center gap-2 mx-auto">
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-              </svg>
-              Connect to Google Drive
-            </button>
-            <p className="text-xs text-gray-400">
-              Need to configure first? Go to <Link href="/settings" className="text-primary hover:underline">Settings</Link>
-            </p>
+        {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>}
+        {uploadMsg && <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded text-sm">{uploadMsg}</div>}
+
+        {/* Step 1: Upload client_secret.json (if not configured) */}
+        {configured === false && (
+          <div className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
+            <h2 className="text-lg font-semibold">Step 1: Configure OAuth</h2>
+            <form onSubmit={handleUpload} className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">client_secret.json</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-primary file:text-white"
+                />
+              </label>
+              <button type="submit" disabled={loading || !uploadFile}
+                className="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-dark disabled:opacity-50">
+                {loading ? "Uploading..." : "Upload"}
+              </button>
+            </form>
           </div>
         )}
 
-        {/* Connected - File Browser */}
-        {connected && (
-          <>
-            {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">{error}</div>}
+        {/* Step 2: Connect (if configured but not browsing) */}
+        {configured && files.length === 0 && !loading && (
+          <div className="bg-white rounded-lg shadow-sm border p-8 text-center space-y-4">
+            <h2 className="text-xl font-semibold">Connect to Google Drive</h2>
+            <p className="text-gray-500">Authorize this app to access your Google Drive files.</p>
+            <button onClick={handleConnect}
+              className="px-6 py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-medium mx-auto">
+              Connect to Google Drive
+            </button>
+          </div>
+        )}
 
+        {/* Step 3: Browse files (connected) */}
+        {configured && (
+          <>
             <div className="bg-white rounded-lg shadow-sm border p-4 flex gap-2">
               <input
                 value={folderId}
                 onChange={(e) => setFolderId(e.target.value)}
-                placeholder="Google Drive Folder ID (or 'root')"
+                placeholder="Folder ID or 'root'"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
               />
               <button onClick={() => listFolder(folderId)} disabled={loading}
                 className="px-4 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-dark disabled:opacity-50">
                 {loading ? "Loading..." : "Browse"}
               </button>
+              <button onClick={handleConnect}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
+                Re-authorize
+              </button>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-              {files.length === 0 ? (
-                <p className="p-8 text-center text-gray-400">{loading ? "Loading..." : "No files in this folder"}</p>
+              {files.length === 0 && !loading ? (
+                <p className="p-8 text-center text-gray-400">Enter a folder ID and click Browse</p>
+              ) : files.length === 0 ? (
+                <p className="p-8 text-center text-gray-400">Loading...</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
@@ -141,8 +188,8 @@ export default function DrivePage() {
         )}
 
         {/* Checking */}
-        {connected === null && (
-          <p className="text-center text-gray-400 p-8">Checking connection...</p>
+        {configured === null && (
+          <p className="text-center text-gray-400 p-8">Loading...</p>
         )}
       </main>
     </div>
