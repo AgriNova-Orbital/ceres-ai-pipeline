@@ -293,6 +293,8 @@ def register_runs_api(
     def api_jobs():
         jobs = []
         workers = []
+        limit_arg = request.args.get("limit", "100").strip()
+        all_arg = request.args.get("all", "0").strip()
         try:
             queue = Queue(connection=redis_conn)
 
@@ -317,9 +319,9 @@ def register_runs_api(
                 _add_rq_job(jid, "queued")
             for jid in queue.started_job_registry.get_job_ids():
                 _add_rq_job(jid, "running")
-            for jid in queue.finished_job_registry.get_job_ids()[:50]:
+            for jid in queue.finished_job_registry.get_job_ids():
                 _add_rq_job(jid, "finished")
-            for jid in queue.failed_job_registry.get_job_ids()[:50]:
+            for jid in queue.failed_job_registry.get_job_ids():
                 _add_rq_job(jid, "failed")
 
             # Workers
@@ -343,8 +345,18 @@ def register_runs_api(
 
         # Sort by enqueued time
         jobs.sort(key=lambda x: x.get("enqueued_at", ""), reverse=True)
+        total_jobs = len(jobs)
 
-        return jsonify(jobs=jobs[:100], workers=workers)
+        if all_arg == "1":
+            visible_jobs = jobs
+        else:
+            try:
+                limit = max(1, int(limit_arg))
+            except ValueError:
+                limit = 100
+            visible_jobs = jobs[:limit]
+
+        return jsonify(jobs=visible_jobs, workers=workers, total=total_jobs)
 
     # ── Data Dirs ────────────────────────────────────────
 

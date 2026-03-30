@@ -272,3 +272,69 @@ def test_drive_download_accepts_json_payload(tmp_path: Path, monkeypatch: pytest
     job_kwargs = kwargs["args"][0]
     assert job_kwargs["file_ids"] == ["file-1", "file-2"]
     assert job_kwargs["save_dir"] == "data/raw/drive_download"
+
+
+
+def test_api_jobs_respects_limit_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeRegistry:
+        def __init__(self, ids):
+            self._ids = ids
+        def get_job_ids(self):
+            return self._ids
+
+    class FakeJob:
+        def __init__(self, jid: str):
+            self.id = jid
+            self.description = f"train: job-{jid}"
+            self.meta = {}
+            self.result = None
+            self.exc_info = None
+            self.enqueued_at = None
+            self.started_at = None
+            self.ended_at = None
+        def get_status(self):
+            return "finished"
+
+    class FakeQueue:
+        def __init__(self):
+            ids = [f"job-{i:03d}" for i in range(150)]
+            self._ids = ids
+            self.started_job_registry = FakeRegistry([])
+            self.finished_job_registry = FakeRegistry(ids)
+            self.failed_job_registry = FakeRegistry([])
+        def get_job_ids(self):
+            return []
+        def fetch_job(self, jid):
+            return FakeJob(jid)
+
+    class FakeWorker:
+        name = "worker-1"
+        def get_state(self):
+            return "idle"
+        def get_current_job_id(self):
+            return None
+
+    monkeypatch.setattr("rq.Queue", lambda connection=None: FakeQueue())
+    monkeypatch.setattr("rq.Worker.all", lambda connection=None: [FakeWorker()])
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+
+    resp_default = client.get("/api/jobs")
+    assert resp_default.status_code == 200
+    data_default = resp_default.get_json()
+    assert len(data_default["jobs"]) == 100
+
+    resp_500 = client.get("/api/jobs?limit=500")
+    assert resp_500.status_code == 200
+    data_500 = resp_500.get_json()
+    assert len(data_500["jobs"]) == 150
+
+    resp_all = client.get("/api/jobs?all=1")
+    assert resp_all.status_code == 200
+    data_all = resp_all.get_json()
+    assert len(data_all["jobs"]) == 150

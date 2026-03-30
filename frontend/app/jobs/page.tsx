@@ -37,13 +37,17 @@ export default function JobsPage() {
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [limit, setLimit] = useState("500");
+  const [totalJobs, setTotalJobs] = useState(0);
 
   async function load() {
     try {
-      const res = await fetch("/api/jobs");
+      const query = limit === "all" ? "/api/jobs?all=1" : `/api/jobs?limit=${limit}`;
+      const res = await fetch(query);
       const data = await res.json();
       setJobs(data.jobs || []);
       setWorkers(data.workers || []);
+      setTotalJobs(Number(data.total || 0));
     } catch { /* ignore */ }
     setLoading(false);
   }
@@ -52,7 +56,7 @@ export default function JobsPage() {
     load();
     const id = setInterval(load, 2000);
     return () => clearInterval(id);
-  }, []);
+  }, [limit]);
 
   const filtered = filter === "all" ? jobs : jobs.filter((j) => j.status === filter);
   const counts = {
@@ -71,6 +75,17 @@ export default function JobsPage() {
           <h1 className="text-xl font-bold">Jobs Monitor</h1>
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={limit}
+            onChange={(e) => setLimit(e.target.value)}
+            className="text-sm px-2 py-1 border rounded bg-white"
+          >
+            <option value="100">100</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
+            <option value="all">All</option>
+          </select>
+          <span className="text-xs text-gray-400">showing {jobs.length}/{totalJobs || jobs.length}</span>
           <button onClick={load} className="text-sm px-3 py-1 border rounded hover:bg-gray-50">Refresh</button>
           <LogoutButton />
         </div>
