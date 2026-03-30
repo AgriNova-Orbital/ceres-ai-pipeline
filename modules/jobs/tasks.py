@@ -61,6 +61,8 @@ def run_script(
         "returncode": proc.returncode,
         "stdout": proc.stdout[-2000:],
         "stderr": proc.stderr[-2000:],
+        "cmd": cmd,
+        "cwd": cwd,
     }
 
 

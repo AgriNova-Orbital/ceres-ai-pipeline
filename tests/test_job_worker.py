@@ -4,6 +4,8 @@ def test_run_script_task_executes_subprocess() -> None:
     result = run_script(["echo", "hello"], cwd=".")
     assert result["returncode"] == 0
     assert "hello" in result["stdout"]
+    assert result["cmd"] == ["echo", "hello"]
+    assert result["cwd"] == "."
 
 
 def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> None:
@@ -42,7 +44,6 @@ def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> No
     assert "downloaded" in result
 
 
-
 def test_task_drive_download_supports_direct_file_ids(monkeypatch, tmp_path) -> None:
     from modules.jobs.tasks import task_drive_download
 
@@ -56,14 +57,19 @@ def test_task_drive_download_supports_direct_file_ids(monkeypatch, tmp_path) -> 
                         "mimeType": "image/tiff",
                         "size": "10",
                     }
+
             return _Req()
 
     class FakeService:
         def files(self):
             return FakeFilesApi()
 
-    monkeypatch.setattr("modules.jobs.tasks.get_drive_service", lambda **_: FakeService())
-    monkeypatch.setattr("modules.jobs.tasks.download_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "modules.jobs.tasks.get_drive_service", lambda **_: FakeService()
+    )
+    monkeypatch.setattr(
+        "modules.jobs.tasks.download_file", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(
         "modules.jobs.tasks.ingest_downloaded_geotiffs",
         lambda path: {
@@ -81,8 +87,9 @@ def test_task_drive_download_supports_direct_file_ids(monkeypatch, tmp_path) -> 
     assert result["single_tile_weeks_normalized"] == ["2021W02"]
 
 
-
-def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(monkeypatch, tmp_path) -> None:
+def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(
+    monkeypatch, tmp_path
+) -> None:
     from modules.jobs.tasks import task_drive_download
 
     class FakeFilesApi:
@@ -95,6 +102,7 @@ def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(m
                         "mimeType": "image/tiff",
                         "size": "10",
                     }
+
             return _Req()
 
     class FakeService:
@@ -103,13 +111,17 @@ def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(m
 
     monkeypatch.setattr(
         "modules.jobs.tasks.get_drive_service",
-        lambda **_: (_ for _ in ()).throw(AssertionError("should not use token_json auth path")),
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("should not use token_json auth path")
+        ),
     )
     monkeypatch.setattr(
         "modules.jobs.tasks.build_drive_service_from_oauth_token",
         lambda token: FakeService(),
     )
-    monkeypatch.setattr("modules.jobs.tasks.download_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "modules.jobs.tasks.download_file", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(
         "modules.jobs.tasks.ingest_downloaded_geotiffs",
         lambda path: {
@@ -125,7 +137,10 @@ def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(m
         {
             "file_ids": ["file-1"],
             "save_dir": str(tmp_path),
-            "oauth_token": {"access_token": "abc", "scope": "openid https://www.googleapis.com/auth/drive"},
+            "oauth_token": {
+                "access_token": "abc",
+                "scope": "openid https://www.googleapis.com/auth/drive",
+            },
         }
     )
 
