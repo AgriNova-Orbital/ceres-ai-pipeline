@@ -724,6 +724,26 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         except Exception:
             return None
 
+    def _drive_list_all(svc, q: str, fields: str) -> list[dict]:
+        """Fetch all pages from Google Drive API."""
+        all_items = []
+        page_token = None
+        while True:
+            req = svc.files().list(
+                q=q,
+                fields=f"nextPageToken, files({fields})",
+                pageSize=1000,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                pageToken=page_token,
+            )
+            resp = req.execute()
+            all_items.extend(resp.get("files", []))
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
+        return all_items
+
     @app.get("/api/drive/list")
     def drive_list() -> Response:
         svc = _build_drive_service()
@@ -732,44 +752,40 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         folder_id = request.args.get("id", "root")
         try:
             q_folders = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false"
-            resp = (
-                svc.files()
-                .list(
-                    q=q_folders,
-                    fields="files(id, name, mimeType)",
-                    pageSize=100,
-                    supportsAllDrives=True,
-                    includeItemsFromAllDrives=True,
-                )
-                .execute()
-            )
+            folder_items = _drive_list_all(svc, q_folders, "id, name, mimeType")
             folders = [
-                {"id": f["id"], "name": f["name"], "type": "folder"}
-                for f in resp.get("files", [])
+                {"id": f["id"], "name": f["name"], "mimeType": f["mimeType"]}
+                for f in folder_items
             ]
+
             q_files = f"'{folder_id}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed = false"
-            resp_files = (
-                svc.files()
-                .list(
-                    q=q_files,
-                    fields="files(id, name, mimeType, size)",
-                    pageSize=1000,
-                    supportsAllDrives=True,
-                    includeItemsFromAllDrives=True,
-                )
-                .execute()
+            file_items = _drive_list_all(
+                svc, q_files, "id, name, mimeType, size, modifiedTime"
             )
             files = []
-            for f in resp_files.get("files", []):
+            for f in file_items:
+                size_bytes = int(f["size"]) if "size" in f and f["size"] else 0
                 files.append(
                     {
                         "id": f["id"],
                         "name": f["name"],
-                        "type": "file",
-                        "size": int(f["size"]) if "size" in f else None,
+                        "mimeType": f.get("mimeType", ""),
+                        "size": size_bytes,
+                        "size_mb": round(size_bytes / 1e6, 1) if size_bytes else 0,
+                        "modifiedTime": f.get("modifiedTime"),
                     }
                 )
-            return jsonify({"folder_id": folder_id, "folders": folders, "files": files})
+            # Sort: folders first, then files by name
+            folders.sort(key=lambda x: x["name"].lower())
+            files.sort(key=lambda x: x["name"].lower())
+            return jsonify({
+                "folder_id": folder_id,
+                "folders": folders,
+                "files": files,
+                "total": len(folders) + len(files),
+                "folder_count": len(folders),
+                "file_count": len(files),
+            })
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 

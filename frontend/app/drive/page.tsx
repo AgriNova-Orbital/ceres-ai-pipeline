@@ -28,6 +28,9 @@ export default function DrivePage() {
   const [folderId, setFolderId] = useState("root");
   const [folderPath, setFolderPath] = useState<{ id: string; name: string }[]>([{ id: "root", name: "My Drive" }]);
   const [files, setFiles] = useState<DriveFile[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [folderCount, setFolderCount] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -58,7 +61,11 @@ export default function DrivePage() {
       const res = await fetch(`/api/drive/list?id=${id}`);
       if (res.ok) {
         const data = await res.json();
-        setFiles(data.files || []);
+        const allItems = [...(data.folders || []), ...(data.files || [])];
+        setFiles(allItems);
+        setTotalCount(data.total || allItems.length);
+        setFolderCount(data.folder_count || (data.folders || []).length);
+        setFileCount(data.file_count || (data.files || []).length);
         setError("");
         setSelected(new Set());
       } else {
@@ -194,6 +201,7 @@ export default function DrivePage() {
             <>
               {/* Toolbar */}
               <div className="bg-white rounded-lg shadow-sm border p-2 flex items-center gap-2 text-sm font-sans">
+              <span className="px-2 text-xs text-gray-500">{folderCount} folders / {fileCount} files</span>
                 <input value={folderId} onChange={(e) => setFolderId(e.target.value)}
                   placeholder="Folder ID" className="flex-1 px-2 py-1 border rounded text-xs" />
                 <button onClick={() => listFolder(folderId)} disabled={loading}
