@@ -819,26 +819,29 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     @app.post("/api/drive/download")
     def drive_download() -> Response:
-        svc = _build_drive_service()
-        if svc is None:
-            return jsonify({"error": "Not authenticated with Drive"}), 401
-        folder_id = request.form.get("folder_id", "").strip()
-        save_dir = request.form.get("save_dir", "data/raw/drive_download").strip()
-        if not folder_id:
-            return jsonify({"error": "folder_id required"}), 400
+        data = request.get_json(silent=True) or request.form
+        folder_id = str(data.get("folder_id", "")).strip()
+        raw_file_ids = data.get("file_ids") or []
+        file_ids = [str(x).strip() for x in raw_file_ids if str(x).strip()] if isinstance(raw_file_ids, list) else []
+        save_dir = str(data.get("save_dir", "data/raw/drive_download")).strip()
+
+        if not folder_id and not file_ids:
+            return jsonify({"error": "folder_id or file_ids required"}), 400
 
         queue = get_queue_conn()
         job_kwargs = {
-            "folder_id": folder_id,
+            "folder_id": folder_id or None,
+            "file_ids": file_ids,
             "save_dir": save_dir,
-            "oauth_token": None,  # WIP: OAuth - was session.get("google_token")
+            "oauth_token": None,
         }
+        target = f"folder:{folder_id}" if folder_id else f"files:{len(file_ids)}"
         job = queue.enqueue(
             "modules.jobs.tasks.task_drive_download",
             args=(job_kwargs,),
             job_timeout="2h",
             result_ttl="7d",
-            description=f"drive_download: {folder_id}",
+            description=f"drive_download: {target}",
         )
         rec = JobRecord(
             id=job.id,
@@ -850,8 +853,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         )
         app.config["JOB_HISTORY"].insert(0, rec)
         app.config["JOB_HISTORY"] = app.config["JOB_HISTORY"][:100]
-        flash(f"Drive download enqueued (job {job.id}).", "success")
-        return redirect(url_for("home"))
+        return jsonify({"job_id": job.id, "status": "enqueued"})
 
     def _human_bytes(n: float) -> str:
         for unit in ["B", "KB", "MB", "GB", "TB"]:

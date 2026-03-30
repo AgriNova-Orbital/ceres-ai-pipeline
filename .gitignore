@@ -15,6 +15,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/lib/
+!frontend/lib/**
 lib64/
 parts/
 sdist/
@@ -153,6 +155,8 @@ venv.bak/
 
 # Local data/artifacts
 data/
+!frontend/app/data/
+!frontend/app/data/**
 runs/
 reports/
 backups/

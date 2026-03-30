@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import { summarizeWeekRange } from "@/lib/week-range";
 
 interface DriveFile {
   id: string;
@@ -20,6 +21,8 @@ interface DownloadItem {
   status: string;
   message: string;
   jobId?: string;
+  speedBps?: number;
+  etaSeconds?: number | null;
 }
 
 export default function DrivePage() {
@@ -36,6 +39,11 @@ export default function DrivePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [downloads, setDownloads] = useState<DownloadItem[]>([]);
   const [logLines, setLogLines] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<"name" | "size" | "modified">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
+  const [onlySelectedRange, setOnlySelectedRange] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   function addLog(line: string) {
@@ -101,7 +109,7 @@ export default function DrivePage() {
         const res = await fetch("/api/drive/download", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ folder_id: item.id, save_dir: `data/raw/drive_download` }),
+          body: JSON.stringify({ file_ids: [item.id], save_dir: `data/raw/drive_download` }),
         });
         const data = await res.json();
         if (data.job_id) {
@@ -129,7 +137,14 @@ export default function DrivePage() {
             if (job) {
               const prog = Number(job.meta?.progress ?? (job.status === "finished" ? 100 : 0));
               const step = String(job.meta?.step ?? job.status);
-              return { ...d, status: job.status, progress: prog, message: step };
+              return {
+                ...d,
+                status: job.status,
+                progress: prog,
+                message: step,
+                speedBps: Number(job.meta?.speed_bps ?? 0),
+                etaSeconds: job.meta?.eta_seconds != null ? Number(job.meta.eta_seconds) : null,
+              };
             }
             return d;
           })
@@ -147,7 +162,34 @@ export default function DrivePage() {
 
   const total = downloads.length;
   const done = downloads.filter((d) => d.status === "finished" || d.status === "failed" || d.status === "error").length;
-  const active = downloads.filter((d) => d.status === "running").length;
+  const sortedFiles: DriveFile[] = useMemo(() => {
+    const next: DriveFile[] = [...files];
+    next.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "name") cmp = a.name.localeCompare(b.name);
+      if (sortBy === "size") cmp = (a.size_mb || 0) - (b.size_mb || 0);
+      if (sortBy === "modified") cmp = (a.modifiedTime || "").localeCompare(b.modifiedTime || "");
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+    return next;
+  }, [files, sortBy, sortOrder]);
+  const rangeSummary: { selected: DriveFile[]; weekCount: number; fileCount: number; totalSizeMb: number } = useMemo(
+    () => summarizeWeekRange(sortedFiles, rangeStart, rangeEnd, (f) => f.name, (f) => f.size_mb || 0),
+    [sortedFiles, rangeStart, rangeEnd]
+  );
+  const visibleFiles: DriveFile[] = onlySelectedRange && rangeStart && rangeEnd ? rangeSummary.selected : sortedFiles;
+
+  function handleSelectRange() {
+    if (!rangeStart || !rangeEnd) {
+      addLog("Error: enter start and end week (e.g. 2020W53 ~ 2021W10)");
+      return;
+    }
+    const ids = new Set((rangeSummary.selected as DriveFile[]).map((f: DriveFile) => f.id));
+    setSelected(ids);
+    addLog(
+      `Selected ${rangeSummary.fileCount} files across ${rangeSummary.weekCount} weeks (${rangeSummary.totalSizeMb.toFixed(1)} MB)`
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 font-mono">
@@ -210,13 +252,51 @@ export default function DrivePage() {
                 </button>
                 <button onClick={() => window.location.href = "/api/oauth/login"}
                   className="px-3 py-1 border rounded text-xs hover:bg-gray-50">Re-auth</button>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "name" | "size" | "modified")}
+                  className="px-2 py-1 border rounded text-xs"
+                >
+                  <option value="name">Sort: Name</option>
+                  <option value="size">Sort: Size</option>
+                  <option value="modified">Sort: Date</option>
+                </select>
+                <button
+                  onClick={() => setSortOrder((v) => (v === "asc" ? "desc" : "asc"))}
+                  className="px-2 py-1 border rounded text-xs hover:bg-gray-50"
+                >
+                  {sortOrder === "asc" ? "Asc" : "Desc"}
+                </button>
+                <input
+                  value={rangeStart}
+                  onChange={(e) => setRangeStart(e.target.value.toUpperCase())}
+                  placeholder="2020W53"
+                  className="w-24 px-2 py-1 border rounded text-xs"
+                />
+                <span className="text-xs text-gray-400">~</span>
+                <input
+                  value={rangeEnd}
+                  onChange={(e) => setRangeEnd(e.target.value.toUpperCase())}
+                  placeholder="2021W10"
+                  className="w-24 px-2 py-1 border rounded text-xs"
+                />
+                <button onClick={handleSelectRange} className="px-2 py-1 border rounded text-xs hover:bg-gray-50">Range</button>
+                <button onClick={() => setOnlySelectedRange((v) => !v)} className="px-2 py-1 border rounded text-xs hover:bg-gray-50">
+                  {onlySelectedRange ? "Show All" : "Only Range"}
+                </button>
                 {selected.size > 0 && (
-                  <button onClick={() => handleDownload(files.filter((f) => selected.has(f.id)).map((f) => ({ id: f.id, name: f.name, size: f.size_mb })))}
+                  <button onClick={() => handleDownload((visibleFiles as DriveFile[]).filter((f: DriveFile) => selected.has(f.id)).map((f: DriveFile) => ({ id: f.id, name: f.name, size: f.size_mb })))}
                     className="px-3 py-1 bg-green-600 text-white rounded text-xs">
                     Download ({selected.size})
                   </button>
                 )}
               </div>
+
+              {(rangeStart && rangeEnd) && (
+                <div className="text-xs text-gray-500 px-1 font-sans">
+                  Range match: {rangeSummary.weekCount} weeks / {rangeSummary.fileCount} files / {rangeSummary.totalSizeMb.toFixed(1)} MB
+                </div>
+              )}
 
               {/* Breadcrumb */}
               <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -234,16 +314,16 @@ export default function DrivePage() {
               {/* Table */}
               <div className="bg-black text-green-400 rounded-lg shadow-lg overflow-hidden text-xs">
                 <div className="px-3 py-1.5 bg-gray-900 border-b border-gray-700 text-gray-400 flex gap-4">
-                  <span className="w-4"><input type="checkbox" checked={selected.size === files.length && files.length > 0}
-                    onChange={() => { if (selected.size === files.length) setSelected(new Set()); else setSelected(new Set(files.map((f) => f.id))); }} /></span>
+                  <span className="w-4"><input type="checkbox" checked={selected.size === visibleFiles.length && visibleFiles.length > 0}
+                    onChange={() => { if (selected.size === visibleFiles.length) setSelected(new Set()); else setSelected(new Set(visibleFiles.map((f: DriveFile) => f.id))); }} /></span>
                   <span className="w-96">Name</span>
                   <span className="w-20">Size</span>
                   <span className="w-24">Modified</span>
                   <span className="w-16">Action</span>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                  {files.length === 0 && !loading && <div className="px-3 py-4 text-gray-500 text-center">empty</div>}
-                  {files.map((f) => {
+                  {visibleFiles.length === 0 && !loading && <div className="px-3 py-4 text-gray-500 text-center">empty</div>}
+                  {visibleFiles.map((f) => {
                     const isFolder = f.mimeType === "application/vnd.google-apps.folder";
                     return (
                       <div key={f.id}
@@ -290,14 +370,6 @@ export default function DrivePage() {
               </div>
               <div className="p-3 space-y-1.5 max-h-80 overflow-y-auto">
                 {downloads.map((d, i) => {
-                  const barLen = 25;
-                  const filled = Math.round((d.progress / 100) * barLen);
-                  const bar = "#".repeat(filled) + "-".repeat(barLen - filled);
-                  const statusIcon =
-                    d.status === "finished" ? "\u2713" :
-                    d.status === "error" || d.status === "failed" ? "\u2717" :
-                    d.status === "running" ? ">" : " ";
-
                   return (
                     <div key={`${d.id}-${i}`}>
                       <span className="text-gray-500">({i + 1}/{total}) </span>
@@ -315,6 +387,12 @@ export default function DrivePage() {
                       <span className="text-green-300">{bar}</span>
                       <span className="text-yellow-400 ml-2">{d.progress}%</span>
                       <span className="text-gray-500 ml-2">{d.message}</span>
+                      {d.speedBps ? (
+                        <span className="text-cyan-400 ml-2">{formatSpeed(d.speedBps)}</span>
+                      ) : null}
+                      {d.etaSeconds ? (
+                        <span className="text-purple-400 ml-2">ETA {formatEta(d.etaSeconds)}</span>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -350,4 +428,21 @@ export default function DrivePage() {
       </div>
     </div>
   );
+}
+
+function formatSpeed(speedBps: number): string {
+  if (!speedBps || speedBps <= 0) return "0 B/s";
+  const mib = speedBps / (1024 * 1024);
+  if (mib >= 1) return `${mib.toFixed(2)} MiB/s`;
+  const kib = speedBps / 1024;
+  if (kib >= 1) return `${kib.toFixed(1)} KiB/s`;
+  return `${speedBps.toFixed(0)} B/s`;
+}
+
+function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0s";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
 }

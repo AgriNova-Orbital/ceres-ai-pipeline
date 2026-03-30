@@ -40,3 +40,42 @@ def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> No
 
     assert result["single_tile_weeks_normalized"] == ["2021W01"]
     assert "downloaded" in result
+
+
+
+def test_task_drive_download_supports_direct_file_ids(monkeypatch, tmp_path) -> None:
+    from modules.jobs.tasks import task_drive_download
+
+    class FakeFilesApi:
+        def get(self, fileId, supportsAllDrives=True):
+            class _Req:
+                def execute(self_nonlocal):
+                    return {
+                        "id": fileId,
+                        "name": "fr_wheat_feat_2021W02-0000000000-0000000000.tif",
+                        "mimeType": "image/tiff",
+                        "size": "10",
+                    }
+            return _Req()
+
+    class FakeService:
+        def files(self):
+            return FakeFilesApi()
+
+    monkeypatch.setattr("modules.jobs.tasks.get_drive_service", lambda **_: FakeService())
+    monkeypatch.setattr("modules.jobs.tasks.download_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "modules.jobs.tasks.ingest_downloaded_geotiffs",
+        lambda path: {
+            "merged_weeks": [],
+            "single_tile_weeks_normalized": ["2021W02"],
+            "failed_weeks": [],
+            "warnings": [],
+            "unknown_files": [],
+        },
+    )
+
+    result = task_drive_download({"file_ids": ["file-1"], "save_dir": str(tmp_path)})
+
+    assert result["downloaded"] == 1
+    assert result["single_tile_weeks_normalized"] == ["2021W02"]

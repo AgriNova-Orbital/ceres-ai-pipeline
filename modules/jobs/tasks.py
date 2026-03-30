@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,17 +17,21 @@ from modules.drive_oauth import download_file, get_drive_service, list_folder_fi
 from modules.merge_geotiffs import ingest_downloaded_geotiffs
 
 
-def _set_progress(step: str, pct: int | None = None) -> None:
-    """Update job meta with progress info."""
+def _set_job_meta(**fields: Any) -> None:
     try:
         job = get_current_job()
         if job:
-            job.meta["step"] = step
-            if pct is not None:
-                job.meta["progress"] = pct
+            job.meta.update(fields)
             job.save_meta()
     except Exception:
         pass
+
+
+def _set_progress(step: str, pct: int | None = None) -> None:
+    fields: dict[str, Any] = {"step": step}
+    if pct is not None:
+        fields["progress"] = pct
+    _set_job_meta(**fields)
 
 
 def run_script(
@@ -129,16 +134,29 @@ def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     oauth_token = kwargs.pop("oauth_token", None)
-    folder_id = kwargs["folder_id"]
+    folder_id = kwargs.pop("folder_id", None)
+    file_ids = kwargs.pop("file_ids", []) or []
     save_dir = Path(kwargs["save_dir"])
 
     credentials_json = Path("credentials.json")
     token_json = Path("token.json")
 
-    if oauth_token:
-        import json
-        import os
+    if not oauth_token:
+        # fallback to latest stored Drive token in SQLite
+        try:
+            from modules.persistence.sqlite_store import SQLiteStore
 
+            store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
+            with store._connect() as conn:
+                row = conn.execute(
+                    "SELECT token_json FROM user_oauth_tokens ORDER BY updated_at DESC LIMIT 1"
+                ).fetchone()
+            if row and row["token_json"]:
+                oauth_token = json.loads(row["token_json"])
+        except Exception:
+            oauth_token = None
+
+    if oauth_token:
         token_json = Path(os.environ.get("OAUTH_TOKEN_CACHE", "token.json"))
         token_json.write_text(json.dumps(oauth_token), encoding="utf-8")
 
@@ -148,34 +166,98 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
         token_json=token_json,
     )
 
-    all_files = list_folder_files(svc, folder_id=folder_id)
-    tif_files = [f for f in all_files if f.name.lower().endswith((".tif", ".tiff"))]
-    total_size = estimate_download_size([{"size": f.size or 0} for f in tif_files])
+    if file_ids:
+        drive_files = []
+        for fid in file_ids:
+            meta = svc.files().get(fileId=fid, supportsAllDrives=True).execute()
+            if str(meta.get("mimeType", "")).lower().endswith("folder"):
+                continue
+            name = str(meta.get("name", fid))
+            if not name.lower().endswith((".tif", ".tiff")):
+                continue
+            drive_files.append(
+                type(
+                    "DriveFileObj",
+                    (),
+                    {
+                        "id": fid,
+                        "name": name,
+                        "size": int(meta.get("size", 0)) if meta.get("size") else 0,
+                    },
+                )()
+            )
+    elif folder_id:
+        all_files = list_folder_files(svc, folder_id=folder_id)
+        drive_files = [
+            f for f in all_files if f.name.lower().endswith((".tif", ".tiff"))
+        ]
+    else:
+        return {"downloaded": 0, "total_size": 0, "warnings": ["no target provided"]}
+
+    total_size = estimate_download_size(
+        [{"size": getattr(f, "size", 0) or 0} for f in drive_files]
+    )
+    bytes_done = 0
+    start_ts = time.monotonic()
+
+    def _on_chunk(n_bytes: int, current_file: str = "") -> None:
+        nonlocal bytes_done
+        bytes_done += n_bytes
+        elapsed = max(time.monotonic() - start_ts, 0.001)
+        speed_bps = bytes_done / elapsed
+        remaining = max(total_size - bytes_done, 0)
+        eta_seconds = int(remaining / speed_bps) if speed_bps > 0 else None
+        progress = int((bytes_done / total_size) * 100) if total_size > 0 else 100
+        _set_job_meta(
+            progress=progress,
+            step=f"downloading {current_file}" if current_file else "downloading",
+            bytes_done=bytes_done,
+            total_bytes=total_size,
+            speed_bps=round(speed_bps, 2),
+            eta_seconds=eta_seconds,
+            current_file=current_file,
+        )
 
     save_dir.mkdir(parents=True, exist_ok=True)
-    _set_progress(f"downloading {len(tif_files)} files", 5)
+    _set_job_meta(
+        step=f"downloading {len(drive_files)} files",
+        progress=5,
+        bytes_done=0,
+        total_bytes=total_size,
+        speed_bps=0,
+        eta_seconds=None,
+        total_files=len(drive_files),
+        files_done=0,
+    )
 
-    with DownloadProgress(total_bytes=total_size, total_files=len(tif_files)) as prog:
-        for i, f in enumerate(tif_files):
+    with DownloadProgress(total_bytes=total_size, total_files=len(drive_files)) as prog:
+        for i, f in enumerate(drive_files):
             dst = save_dir / f.name
-            if dst.exists() and dst.stat().st_size == (f.size or 0):
-                prog.on_chunk(f.size or 0)
-                prog.on_file_done(f.name, f.size or 0)
+            if dst.exists() and dst.stat().st_size == (getattr(f, "size", 0) or 0):
+                size = getattr(f, "size", 0) or 0
+                prog.on_chunk(size)
+                _on_chunk(size, f.name)
+                prog.on_file_done(f.name, getattr(f, "size", 0) or 0)
+                _set_job_meta(files_done=i + 1)
                 continue
             _set_progress(
-                f"downloading {f.name}", int(5 + 85 * i / max(len(tif_files), 1))
+                f"downloading {f.name}", int(5 + 85 * i / max(len(drive_files), 1))
             )
-            prog.on_file_start(f.name, f.size or 0)
+            prog.on_file_start(f.name, getattr(f, "size", 0) or 0)
             download_file(
                 svc,
                 file_id=f.id,
                 dst_path=dst,
-                progress_callback=prog.on_chunk,
+                progress_callback=lambda n, file_name=f.name: (
+                    prog.on_chunk(n),
+                    _on_chunk(n, file_name),
+                )[-1],
             )
-            prog.on_file_done(f.name, f.size or 0)
+            prog.on_file_done(f.name, getattr(f, "size", 0) or 0)
+            _set_job_meta(files_done=i + 1)
 
     _set_progress("ingesting", 95)
-    result: dict[str, Any] = {"downloaded": len(tif_files), "total_size": total_size}
+    result: dict[str, Any] = {"downloaded": len(drive_files), "total_size": total_size}
 
     try:
         ingest_summary = ingest_downloaded_geotiffs(save_dir)

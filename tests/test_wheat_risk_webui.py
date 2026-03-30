@@ -243,3 +243,32 @@ def test_downloader_preview_runs_dry_run_command(
     assert isinstance(cmd, list)
     assert "scripts/export_weekly_risk_rasters.py" in cmd
     assert "--dry-run" in cmd
+
+
+
+def test_drive_download_accepts_json_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-drive-1"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+
+    resp = client.post(
+        "/api/drive/download",
+        json={"file_ids": ["file-1", "file-2"], "save_dir": "data/raw/drive_download"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["job_id"] == "job-drive-1"
+    _, kwargs = mock_queue.enqueue.call_args
+    job_kwargs = kwargs["args"][0]
+    assert job_kwargs["file_ids"] == ["file-1", "file-2"]
+    assert job_kwargs["save_dir"] == "data/raw/drive_download"
