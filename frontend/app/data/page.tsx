@@ -65,7 +65,7 @@ export default function DataPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center">
+      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Data Browser</h1>
@@ -78,7 +78,7 @@ export default function DataPage() {
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Summary */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Raw GeoTIFFs" value={rawFiles.length} unit={`(${totalSize[0].toFixed(0)} MB)`} />
           <StatCard title="Patch Files" value={patches.length} unit={`(${totalSize[1].toFixed(0)} MB)`} />
           <StatCard title="Run Results" value={runs.length} unit={`(${totalSize[2].toFixed(0)} MB)`} />
@@ -86,7 +86,7 @@ export default function DataPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {tabs.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-3 py-1.5 text-sm rounded-md border ${tab === t.key ? "bg-primary text-white border-primary" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
@@ -123,7 +123,7 @@ export default function DataPage() {
         )}
 
         {/* Content */}
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
           {loading ? <p className="p-8 text-center text-gray-400">Scanning...</p> : (
             <>
               {tab === "raw" && <FileTable files={visibleRawFiles} />}
@@ -185,7 +185,7 @@ function FileTable({ files }: { files: FileInfo[] }) {
 function RunsTable({ runs }: { runs: RunEntry[] }) {
   if (runs.length === 0) return <p className="p-8 text-center text-gray-400">No runs found</p>;
   return (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm min-w-[500px]">
       <thead className="bg-gray-50 border-b"><tr className="text-left text-gray-500">
         <th className="px-4 py-3">Run</th>
         <th className="px-4 py-3">Files</th>

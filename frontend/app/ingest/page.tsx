@@ -58,7 +58,7 @@ export default function IngestPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center">
+      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Data Ingest</h1>
@@ -99,7 +99,7 @@ export default function IngestPage() {
                   </div>
                 </div>
 
-                <div className="px-6 py-4 grid grid-cols-3 gap-4">
+                <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="text-center p-3 bg-green-50 rounded">
                     <p className="text-2xl font-bold text-green-700">{ds.canonical}</p>
                     <p className="text-xs text-gray-500">Canonical (ready)</p>

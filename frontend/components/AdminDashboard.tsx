@@ -81,7 +81,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center">
+      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <a href="/" className="text-primary hover:underline">&larr; Home</a>
           <h1 className="text-xl font-bold">Admin Dashboard</h1>

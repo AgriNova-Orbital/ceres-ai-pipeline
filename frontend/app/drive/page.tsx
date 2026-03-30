@@ -193,7 +193,7 @@ export default function DrivePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-mono">
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center font-sans">
+      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 font-sans">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Google Drive</h1>
@@ -201,7 +201,7 @@ export default function DrivePage() {
         <LogoutButton />
       </header>
 
-      <div className="max-w-7xl mx-auto p-6 flex gap-6">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
         {/* Left: File Browser */}
         <div className="flex-1 space-y-4">
           {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm font-sans">{error}</div>}
@@ -312,8 +312,8 @@ export default function DrivePage() {
               </div>
 
               {/* Table */}
-              <div className="bg-black text-green-400 rounded-lg shadow-lg overflow-hidden text-xs">
-                <div className="px-3 py-1.5 bg-gray-900 border-b border-gray-700 text-gray-400 flex gap-4">
+              <div className="bg-black text-green-400 rounded-lg shadow-lg overflow-x-auto text-xs">
+                <div className="px-3 py-1.5 bg-gray-900 border-b border-gray-700 text-gray-400 flex gap-4 min-w-[600px]">
                   <span className="w-4"><input type="checkbox" checked={selected.size === visibleFiles.length && visibleFiles.length > 0}
                     onChange={() => { if (selected.size === visibleFiles.length) setSelected(new Set()); else setSelected(new Set(visibleFiles.map((f: DriveFile) => f.id))); }} /></span>
                   <span className="w-96">Name</span>
@@ -321,7 +321,7 @@ export default function DrivePage() {
                   <span className="w-24">Modified</span>
                   <span className="w-16">Action</span>
                 </div>
-                <div className="max-h-96 overflow-y-auto">
+                <div className="max-h-96 overflow-y-auto min-w-[600px]">
                   {visibleFiles.length === 0 && !loading && <div className="px-3 py-4 text-gray-500 text-center">empty</div>}
                   {visibleFiles.map((f) => {
                     const isFolder = f.mimeType === "application/vnd.google-apps.folder";
@@ -358,10 +358,10 @@ export default function DrivePage() {
         </div>
 
         {/* Right: Pacman-style Terminal */}
-        <div className="w-96 flex-shrink-0 space-y-4">
+        <div className="w-full lg:w-96 flex-shrink-0 space-y-4">
           {/* Download Progress */}
           {downloads.length > 0 && (
-            <div className="bg-black text-green-400 rounded-lg shadow-lg overflow-hidden text-xs">
+            <div className="bg-black text-green-400 rounded-lg shadow-lg overflow-x-auto text-xs">
               <div className="px-3 py-2 bg-gray-900 border-b border-gray-700 flex justify-between items-center">
                 <span className="text-gray-300 font-bold">
                   :: Installing packages ({done}/{total})

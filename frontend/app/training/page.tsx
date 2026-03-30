@@ -163,7 +163,7 @@ export default function TrainingPage() {
         {/* Input Form */}
         <div className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
           <h2 className="text-lg font-semibold">Configuration</h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Action</span>
               <select value={action} onChange={(e) => setAction(e.target.value)}
@@ -218,7 +218,7 @@ export default function TrainingPage() {
         </div>
 
         {/* Status Summary */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm border p-4">
             <p className="text-sm text-gray-500">Total Cells</p>
             <p className="text-2xl font-bold">{totalCount}</p>
@@ -238,7 +238,7 @@ export default function TrainingPage() {
         </div>
 
         {/* Matrix Table */}
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
           <div className="px-4 py-3 bg-gray-50 border-b flex justify-between items-center">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Matrix Status</h2>
             <div className="flex gap-2">
@@ -256,7 +256,7 @@ export default function TrainingPage() {
           {matrixCells.length === 0 ? (
             <p className="p-8 text-center text-gray-400">Configure levels and steps above</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[700px]">
               <thead className="bg-gray-50 border-b">
                 <tr className="text-left text-gray-500">
                   <th className="px-4 py-2">Level</th>

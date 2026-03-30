@@ -10,7 +10,7 @@ export default function PageLayout({
 }) {
   return (
     <div className="min-h-screen p-8">
-      <header className="mb-8 flex justify-between items-center">
+      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-2xl font-bold">{title}</h1>

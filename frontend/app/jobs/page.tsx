@@ -69,7 +69,7 @@ export default function JobsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center">
+      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
           <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Jobs Monitor</h1>
@@ -113,7 +113,7 @@ export default function JobsPage() {
         </section>
 
         {/* Filter Tabs */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {[
             { key: "all", label: `All (${counts.all})` },
             { key: "queued", label: `Queued (${counts.queued})` },
@@ -132,13 +132,13 @@ export default function JobsPage() {
         </div>
 
         {/* Jobs */}
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
           {loading ? (
             <p className="p-8 text-center text-gray-400">Loading...</p>
           ) : filtered.length === 0 ? (
             <p className="p-8 text-center text-gray-400">No jobs found</p>
           ) : (
-            <div className="divide-y">
+            <div className="divide-y min-w-[800px]">
               {filtered.map((j) => (
                 <div key={j.id} className="hover:bg-gray-50">
                   <button
@@ -232,7 +232,7 @@ function ProgressBar({ pct, step }: { pct: number; step?: string }) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 flex-wrap">
       <span className="text-gray-500 text-xs w-20">{label}:</span>
       <span className="text-gray-800 text-xs">{value}</span>
     </div>
