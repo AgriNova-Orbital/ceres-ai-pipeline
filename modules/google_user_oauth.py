@@ -30,7 +30,14 @@ def _load_client_config_from_file(path: Path) -> tuple[str, str, str | None]:
 def discover_google_oauth_client_secret_file(
     search_roots: Sequence[Path] | None = None,
 ) -> Path | None:
-    roots = list(search_roots) if search_roots is not None else [Path.cwd()]
+    if search_roots is not None:
+        roots = list(search_roots)
+    else:
+        roots = [Path.cwd()]
+        app_db_path = os.environ.get("APP_DB_PATH")
+        if app_db_path:
+            roots.append(Path(app_db_path).resolve().parent)
+        roots.append(Path.cwd() / "state")
     seen: set[Path] = set()
     for root in roots:
         root = root.resolve()
