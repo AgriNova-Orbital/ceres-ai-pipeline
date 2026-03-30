@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, session
 
-api_auth = Blueprint("api_auth", __name__)
-
 
 def register_auth_api(app, sqlite_store) -> None:
+    api_auth = Blueprint("api_auth", __name__)
     @api_auth.post("/api/auth/login")
     def api_login():
         data = request.get_json(silent=True) or {}

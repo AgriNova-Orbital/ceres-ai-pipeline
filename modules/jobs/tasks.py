@@ -13,7 +13,12 @@ from modules.download_progress import (
     bytes_to_human,
     estimate_download_size,
 )
-from modules.drive_oauth import download_file, get_drive_service, list_folder_files
+from modules.drive_oauth import (
+    build_drive_service_from_oauth_token,
+    download_file,
+    get_drive_service,
+    list_folder_files,
+)
 from modules.merge_geotiffs import ingest_downloaded_geotiffs
 
 
@@ -156,15 +161,14 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             oauth_token = None
 
-    if oauth_token:
-        token_json = Path(os.environ.get("OAUTH_TOKEN_CACHE", "token.json"))
-        token_json.write_text(json.dumps(oauth_token), encoding="utf-8")
-
     _set_progress("connecting to drive", 0)
-    svc = get_drive_service(
-        credentials_json=credentials_json,
-        token_json=token_json,
-    )
+    if oauth_token:
+        svc = build_drive_service_from_oauth_token(oauth_token)
+    else:
+        svc = get_drive_service(
+            credentials_json=credentials_json,
+            token_json=token_json,
+        )
 
     if file_ids:
         drive_files = []

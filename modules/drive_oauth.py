@@ -77,6 +77,19 @@ def get_drive_service(
     return googleapiclient.discovery.build("drive", "v3", credentials=creds)
 
 
+def build_drive_service_from_oauth_token(oauth_token: dict[str, Any]) -> Any:
+    """Build Drive service directly from an OAuth token dict.
+
+    This avoids requiring the token to be stored in Google's
+    `authorized_user_file` JSON format.
+    """
+    googleapiclient, _ = _import_google()
+    from modules.google_user_oauth import build_google_credentials_from_oauth_token
+
+    creds = build_google_credentials_from_oauth_token(oauth_token, scopes=SCOPES)
+    return googleapiclient.discovery.build("drive", "v3", credentials=creds)
+
+
 def list_folder_files(
     service: Any, *, folder_id: str, page_size: int = 1000
 ) -> list[DriveFile]:

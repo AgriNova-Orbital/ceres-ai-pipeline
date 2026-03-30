@@ -20,6 +20,7 @@ GOOGLE_METADATA = "https://accounts.google.com/.well-known/openid-configuration"
 
 
 def register_oauth_api(app, sqlite_store) -> None:
+    api_oauth = Blueprint("api_oauth", __name__)
     """Register OAuth API routes.
 
     Key design: Creates a FRESH OAuth() + client per request to avoid
@@ -78,7 +79,11 @@ def register_oauth_api(app, sqlite_store) -> None:
         settings = sqlite_store.get_settings()
         base = settings.get("redirect_base_url") or request.host_url.rstrip("/")
         redirect_uri = f"{base}/api/oauth/callback"
-        return oauth.google.authorize_redirect(redirect_uri)
+        return oauth.google.authorize_redirect(
+            redirect_uri,
+            access_type="offline",
+            prompt="consent",
+        )
 
     @api_oauth.get("/api/oauth/callback")
     def oauth_callback():
@@ -105,6 +110,15 @@ def register_oauth_api(app, sqlite_store) -> None:
             email=email,
             display_name=str(display_name) if display_name else None,
         )
+
+        # Preserve refresh_token if Google doesn't resend it on re-auth
+        existing_token = sqlite_store.get_user_oauth_token(local_user["id"])
+        if (
+            existing_token
+            and existing_token.get("refresh_token")
+            and not token.get("refresh_token")
+        ):
+            token["refresh_token"] = existing_token["refresh_token"]
 
         # Store token in DB (server-side, for Drive API access)
         sqlite_store.save_user_oauth_token(user_id=local_user["id"], token=token)

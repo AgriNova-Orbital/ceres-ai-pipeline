@@ -6,12 +6,11 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
-api_runs = Blueprint("api_runs", __name__)
-
 
 def register_runs_api(
     app, sqlite_store, redis_conn, job_history, get_queue_conn, get_raw_data_dirs
 ) -> None:
+    api_runs = Blueprint("api_runs", __name__)
     from datetime import datetime, timezone
     from rq import Queue
 

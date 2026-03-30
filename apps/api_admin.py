@@ -8,10 +8,9 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify
 
-api_admin = Blueprint("api_admin", __name__)
-
 
 def register_admin_api(app, sqlite_store, redis_conn, job_history) -> None:
+    api_admin = Blueprint("api_admin", __name__)
     @api_admin.get("/api/admin/system")
     def system_info():
         disk = shutil.disk_usage("/app")
