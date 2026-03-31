@@ -337,7 +337,10 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
 
       {resultObj && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {resultObj.requested != null && <InfoRow label="Requested" value={String(resultObj.requested)} />}
           {resultObj.downloaded != null && <InfoRow label="Downloaded" value={String(resultObj.downloaded)} />}
+          {resultObj.overwritten != null && <InfoRow label="Overwritten" value={String(resultObj.overwritten)} />}
+          {resultObj.skipped_existing != null && <InfoRow label="Skipped Existing" value={String(resultObj.skipped_existing)} />}
           {resultObj.total_size != null && <InfoRow label="Total Size" value={formatBytes(Number(resultObj.total_size))} />}
           {Array.isArray(resultObj.merged_weeks) && <InfoRow label="Merged Weeks" value={String(resultObj.merged_weeks.length)} />}
           {Array.isArray(resultObj.single_tile_weeks_normalized) && <InfoRow label="Normalized Weeks" value={String(resultObj.single_tile_weeks_normalized.length)} />}

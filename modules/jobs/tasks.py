@@ -203,6 +203,10 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     total_size = estimate_download_size(
         [{"size": getattr(f, "size", 0) or 0} for f in drive_files]
     )
+    requested_count = len(drive_files)
+    downloaded_count = 0
+    skipped_existing_count = 0
+    overwritten_count = 0
     bytes_done = 0
     start_ts = time.monotonic()
     download_items = [
@@ -290,14 +294,7 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     with DownloadProgress(total_bytes=total_size, total_files=len(drive_files)) as prog:
         for i, f in enumerate(drive_files):
             dst = save_dir / f.name
-            if dst.exists() and dst.stat().st_size == (getattr(f, "size", 0) or 0):
-                size = getattr(f, "size", 0) or 0
-                prog.on_chunk(size)
-                _on_chunk(size, f.name)
-                prog.on_file_done(f.name, getattr(f, "size", 0) or 0)
-                _set_job_meta(files_done=i + 1)
-                _sync_download_item(f.name, status="done", progress=100)
-                continue
+            existed_before = dst.exists()
             _set_progress(
                 f"downloading {f.name}", int(5 + 85 * i / max(len(drive_files), 1))
             )
@@ -313,11 +310,20 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
                 )[-1],
             )
             prog.on_file_done(f.name, getattr(f, "size", 0) or 0)
+            downloaded_count += 1
+            if existed_before:
+                overwritten_count += 1
             _set_job_meta(files_done=i + 1)
             _sync_download_item(f.name, status="done", progress=100)
 
     _set_progress("ingesting", 95)
-    result: dict[str, Any] = {"downloaded": len(drive_files), "total_size": total_size}
+    result: dict[str, Any] = {
+        "requested": requested_count,
+        "downloaded": downloaded_count,
+        "overwritten": overwritten_count,
+        "skipped_existing": skipped_existing_count,
+        "total_size": total_size,
+    }
 
     try:
         ingest_summary = ingest_downloaded_geotiffs(
