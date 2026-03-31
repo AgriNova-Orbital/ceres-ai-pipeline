@@ -57,6 +57,7 @@ export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState("500");
   const [totalJobs, setTotalJobs] = useState(0);
@@ -117,6 +118,16 @@ export default function JobsPage() {
       .filter((key) => groups[key]?.length)
       .map((key) => ({ key, label: sectionLabels[key] || key, jobs: groups[key] }));
   }, [visibleJobs]);
+
+  useEffect(() => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev };
+      for (const group of groupedJobs) {
+        if (typeof next[group.key] === "undefined") next[group.key] = false;
+      }
+      return next;
+    });
+  }, [groupedJobs]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -183,13 +194,19 @@ export default function JobsPage() {
 
           <div className="flex gap-2 flex-wrap">
             {["all", ...sectionOrder.filter((k) => typeCounts[k])].map((key) => (
+              (() => {
+                const meta = getSectionMeta(key);
+                return (
               <button
                 key={key}
                 onClick={() => setTypeFilter(key)}
-                className={`px-3 py-1.5 text-sm rounded-md border ${typeFilter === key ? "bg-slate-900 text-white border-slate-900" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                className={`px-3 py-1.5 text-sm rounded-md border flex items-center gap-2 ${typeFilter === key ? `${meta.activeClass}` : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
               >
+                {key !== "all" && <span className={`inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded text-[10px] font-mono border ${meta.badgeClass}`}>{meta.badge}</span>}
                 {key === "all" ? `All Types (${typeCounts.all || 0})` : `${sectionLabels[key] || key} (${typeCounts[key] || 0})`}
               </button>
+                );
+              })()
             ))}
           </div>
         </div>
@@ -202,19 +219,36 @@ export default function JobsPage() {
           ) : (
             groupedJobs.map((group) => (
               <section key={group.key} className="bg-white rounded-lg shadow-sm border overflow-x-auto">
-                <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{group.label}</h2>
-                  <span className="text-xs text-gray-400">{group.jobs.length} jobs</span>
-                </div>
-                <div className="divide-y min-w-[860px]">
-                  {group.jobs.map((j) => (
+                <button
+                  onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.key]: !prev[group.key] }))}
+                  className="w-full px-4 py-3 border-b bg-gray-50 flex items-center justify-between text-left hover:bg-gray-100"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex items-center justify-center min-w-10 px-2 py-1 rounded text-[10px] font-mono border ${getSectionMeta(group.key).badgeClass}`}>
+                      {getSectionMeta(group.key).badge}
+                    </span>
+                    <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{group.label}</h2>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">{group.jobs.length} jobs</span>
+                    <span className="text-gray-400 text-xs">{collapsedGroups[group.key] ? "[+]" : "[-]"}</span>
+                  </div>
+                </button>
+                {!collapsedGroups[group.key] && (
+                  <div className="divide-y min-w-[860px]">
+                    {group.jobs.map((j) => (
                     <div key={j.id} className="hover:bg-gray-50">
                       <button
                         onClick={() => setExpanded(expanded === j.id ? null : j.id)}
                         className="w-full px-4 py-3 flex items-center gap-4 text-left text-sm"
                       >
                         <span className="font-mono text-xs text-gray-400 w-20">{j.id.slice(0, 8)}</span>
-                        <span className="font-medium w-28">{sectionLabels[j.section] || j.section}</span>
+                        <span className="w-28 flex items-center gap-2">
+                          <span className={`inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded text-[10px] font-mono border ${getSectionMeta(j.section).badgeClass}`}>
+                            {getSectionMeta(j.section).badge}
+                          </span>
+                          <span className="font-medium truncate">{sectionLabels[j.section] || j.section}</span>
+                        </span>
                         <span className="text-gray-500 w-40 truncate">{j.action}</span>
                         <StatusBadge status={j.status} />
                         {j.status === "running" && j.meta?.progress != null && (
@@ -234,8 +268,9 @@ export default function JobsPage() {
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
             ))
           )}
@@ -348,6 +383,52 @@ function StatusBadge({ status }: { status: string }) {
       {status}
     </span>
   );
+}
+
+function getSectionMeta(section: string) {
+  const map: Record<string, { badge: string; badgeClass: string; activeClass: string }> = {
+    drive_download: {
+      badge: "DRV",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      activeClass: "bg-emerald-600 text-white border-emerald-600",
+    },
+    downloader: {
+      badge: "DLD",
+      badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
+      activeClass: "bg-sky-600 text-white border-sky-600",
+    },
+    build: {
+      badge: "BLD",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-200",
+      activeClass: "bg-amber-600 text-white border-amber-600",
+    },
+    train: {
+      badge: "TRN",
+      badgeClass: "bg-violet-50 text-violet-700 border-violet-200",
+      activeClass: "bg-violet-600 text-white border-violet-600",
+    },
+    eval: {
+      badge: "EVL",
+      badgeClass: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
+      activeClass: "bg-fuchsia-600 text-white border-fuchsia-600",
+    },
+    inventory: {
+      badge: "INV",
+      badgeClass: "bg-cyan-50 text-cyan-700 border-cyan-200",
+      activeClass: "bg-cyan-600 text-white border-cyan-600",
+    },
+    unknown: {
+      badge: "???",
+      badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
+      activeClass: "bg-gray-700 text-white border-gray-700",
+    },
+    all: {
+      badge: "ALL",
+      badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
+      activeClass: "bg-slate-900 text-white border-slate-900",
+    },
+  };
+  return map[section] || map.unknown;
 }
 
 function ProgressBar({ pct, step }: { pct: number; step?: string }) {
