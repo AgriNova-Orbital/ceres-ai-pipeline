@@ -317,6 +317,9 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
   const etaSeconds = job.meta?.eta_seconds != null ? Number(job.meta.eta_seconds) : null;
   const bytesDone = job.meta?.bytes_done != null ? Number(job.meta.bytes_done) : null;
   const totalBytes = job.meta?.total_bytes != null ? Number(job.meta.total_bytes) : null;
+  const downloadItems = Array.isArray(job.meta?.download_items) ? job.meta?.download_items as Record<string, unknown>[] : [];
+  const mergeItems = Array.isArray(job.meta?.merge_items) ? job.meta?.merge_items as Record<string, unknown>[] : [];
+  const mergeSummary = (job.meta?.merge_summary ?? {}) as Record<string, unknown>;
 
   return (
     <div className="space-y-3">
@@ -340,6 +343,72 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
           {Array.isArray(resultObj.single_tile_weeks_normalized) && <InfoRow label="Normalized Weeks" value={String(resultObj.single_tile_weeks_normalized.length)} />}
           {Array.isArray(resultObj.failed_weeks) && <InfoRow label="Failed Weeks" value={String(resultObj.failed_weeks.length)} />}
           {Array.isArray(resultObj.unknown_files) && <InfoRow label="Unknown Files" value={String(resultObj.unknown_files.length)} />}
+        </div>
+      )}
+
+      {downloadItems.length > 0 && (
+        <div>
+          <p className="text-gray-500 text-xs font-medium mb-2">Download Items</p>
+          <div className="border rounded-md overflow-hidden">
+            <div className="grid grid-cols-[1.5fr_100px_100px_1fr] gap-2 px-3 py-2 bg-gray-50 text-[11px] text-gray-500 font-medium">
+              <span>File / Week</span>
+              <span>Status</span>
+              <span>Size</span>
+              <span>Progress</span>
+            </div>
+            <div className="max-h-64 overflow-y-auto divide-y">
+              {downloadItems.map((item, idx) => {
+                const itemStatus = String(item.status ?? "queued");
+                const itemProgress = Number(item.progress ?? 0);
+                return (
+                  <div key={`${item.name}-${idx}`} className="grid grid-cols-[1.5fr_100px_100px_1fr] gap-2 px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <div className="font-mono truncate">{String(item.name ?? "")}</div>
+                      <div className="text-gray-400">{String(item.week ?? "-")}</div>
+                    </div>
+                    <div><StatusBadge status={normalizeDownloadStatus(itemStatus)} /></div>
+                    <div className="text-gray-500">{formatBytes(Number(item.size ?? 0))}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(itemProgress, 100)}%` }} />
+                      </div>
+                      <span className="text-[11px] text-gray-500 w-10">{itemProgress}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(mergeItems.length > 0 || Object.keys(mergeSummary).length > 0) && (
+        <div>
+          <p className="text-gray-500 text-xs font-medium mb-2">Weekly Merge Progress</p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+            {mergeSummary.total_weeks != null && <InfoRow label="Total Weeks" value={String(mergeSummary.total_weeks)} />}
+            {mergeSummary.done_weeks != null && <InfoRow label="Done Weeks" value={String(mergeSummary.done_weeks)} />}
+            {mergeSummary.failed_weeks != null && <InfoRow label="Failed Weeks" value={String(mergeSummary.failed_weeks)} />}
+            {mergeSummary.current_week != null && <InfoRow label="Current Week" value={`${String(mergeSummary.current_week)} (${String(mergeSummary.current_mode ?? "")})`} />}
+          </div>
+          <div className="border rounded-md overflow-hidden">
+            <div className="grid grid-cols-[120px_120px_120px_1fr] gap-2 px-3 py-2 bg-gray-50 text-[11px] text-gray-500 font-medium">
+              <span>Week</span>
+              <span>Mode</span>
+              <span>Status</span>
+              <span>Detail</span>
+            </div>
+            <div className="max-h-64 overflow-y-auto divide-y">
+              {mergeItems.map((item, idx) => (
+                <div key={`${item.week}-${idx}`} className="grid grid-cols-[120px_120px_120px_1fr] gap-2 px-3 py-2 text-xs">
+                  <span className="font-mono">{String(item.week ?? "-")}</span>
+                  <span>{String(item.mode ?? "-")}</span>
+                  <span><StatusBadge status={normalizeMergeStatus(String(item.status ?? "queued"))} /></span>
+                  <span className="text-gray-500 break-all">{item.error ? String(item.error) : `${String(item.file_count ?? 0)} file(s)`}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -383,6 +452,18 @@ function StatusBadge({ status }: { status: string }) {
       {status}
     </span>
   );
+}
+
+function normalizeDownloadStatus(status: string): string {
+  if (status === "submitted") return "queued";
+  if (status === "done") return "finished";
+  if (status === "error") return "failed";
+  return status;
+}
+
+function normalizeMergeStatus(status: string): string {
+  if (status === "done") return "finished";
+  return status;
 }
 
 function getSectionMeta(section: string) {

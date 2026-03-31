@@ -5,7 +5,7 @@ import re
 import shutil
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from modules.wheat_risk.features import required_feature_names
 
@@ -225,6 +225,7 @@ def ingest_downloaded_geotiffs(
     directory: Path,
     *,
     compress: str = "LZW",
+    progress_callback: Callable[[dict[str, object]], None] | None = None,
 ) -> dict[str, object]:
     merged_weeks: list[str] = []
     normalized_weeks: list[str] = []
@@ -242,6 +243,16 @@ def ingest_downloaded_geotiffs(
         if _PAT_WEEK_KEY.match(key) is None:
             continue
 
+        if progress_callback:
+            progress_callback(
+                {
+                    "week": key,
+                    "status": "started",
+                    "file_count": len(files),
+                    "mode": "inspect",
+                }
+            )
+
         canonical_files = [p for p in files if _PAT_WEEK.match(p.name)]
         transport_files = [p for p in files if _PAT_WEEK.match(p.name) is None]
 
@@ -251,6 +262,16 @@ def ingest_downloaded_geotiffs(
             except Exception as e:
                 failed_weeks.append(key)
                 warnings.append(f"{key}: {e}")
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "week": key,
+                            "status": "failed",
+                            "file_count": len(files),
+                            "mode": "validate",
+                            "error": str(e),
+                        }
+                    )
                 continue
 
             warnings.extend(_report_warnings(report))
@@ -258,17 +279,53 @@ def ingest_downloaded_geotiffs(
                 warnings.append(
                     f"{key}: canonical GeoTIFF already exists; leaving {len(transport_files)} transport file(s) in place"
                 )
+            if progress_callback:
+                progress_callback(
+                    {
+                        "week": key,
+                        "status": "done",
+                        "file_count": len(files),
+                        "mode": "canonical",
+                    }
+                )
             continue
 
         try:
             if len(transport_files) == 1:
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "week": key,
+                            "status": "running",
+                            "file_count": len(files),
+                            "mode": "normalize",
+                        }
+                    )
                 report = _normalize_single_source(
                     directory,
                     key=key,
                     source=transport_files[0],
                 )
                 normalized_weeks.append(key)
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "week": key,
+                            "status": "done",
+                            "file_count": len(files),
+                            "mode": "normalize",
+                        }
+                    )
             elif len(transport_files) >= 2:
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "week": key,
+                            "status": "running",
+                            "file_count": len(files),
+                            "mode": "merge",
+                        }
+                    )
                 report = _merge_into_canonical(
                     directory,
                     key=key,
@@ -276,11 +333,30 @@ def ingest_downloaded_geotiffs(
                     compress=compress,
                 )
                 merged_weeks.append(key)
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "week": key,
+                            "status": "done",
+                            "file_count": len(files),
+                            "mode": "merge",
+                        }
+                    )
             else:
                 continue
         except Exception as e:
             failed_weeks.append(key)
             warnings.append(f"{key}: {e}")
+            if progress_callback:
+                progress_callback(
+                    {
+                        "week": key,
+                        "status": "failed",
+                        "file_count": len(files),
+                        "mode": "merge" if len(transport_files) >= 2 else "normalize",
+                        "error": str(e),
+                    }
+                )
             continue
 
         warnings.extend(_report_warnings(report))

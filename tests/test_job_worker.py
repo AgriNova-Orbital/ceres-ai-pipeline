@@ -146,3 +146,53 @@ def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(
 
     assert result["downloaded"] == 1
     assert result["single_tile_weeks_normalized"] == ["2021W03"]
+
+
+def test_task_drive_download_sets_download_manifest_in_job_meta(
+    monkeypatch, tmp_path
+) -> None:
+    from modules.jobs.tasks import task_drive_download
+
+    class FakeFile:
+        def __init__(self, file_id: str, name: str, size: int = 10):
+            self.id = file_id
+            self.name = name
+            self.size = size
+
+    meta_calls: list[dict[str, object]] = []
+
+    monkeypatch.setattr("modules.jobs.tasks.get_drive_service", lambda **_: object())
+    monkeypatch.setattr(
+        "modules.jobs.tasks.list_folder_files",
+        lambda _svc, folder_id: [
+            FakeFile("1", "fr_wheat_feat_2021W01-0000000000-0000000000.tif", 11),
+            FakeFile("2", "fr_wheat_feat_2021W01-0000009984-0000000000.tif", 22),
+            FakeFile("3", "fr_wheat_feat_2021W02-0000000000-0000000000.tif", 33),
+        ],
+    )
+    monkeypatch.setattr(
+        "modules.jobs.tasks.download_file", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        "modules.jobs.tasks.ingest_downloaded_geotiffs",
+        lambda path, progress_callback=None: {
+            "merged_weeks": ["2021W01"],
+            "single_tile_weeks_normalized": ["2021W02"],
+            "failed_weeks": [],
+            "warnings": [],
+            "unknown_files": [],
+        },
+    )
+    monkeypatch.setattr(
+        "modules.jobs.tasks._set_job_meta", lambda **fields: meta_calls.append(fields)
+    )
+
+    task_drive_download({"folder_id": "folder", "save_dir": str(tmp_path)})
+
+    manifest_call = next(call for call in meta_calls if "download_items" in call)
+    items = manifest_call["download_items"]
+    assert len(items) == 3
+    assert items[0]["week"] == "2021W01"
+    assert items[2]["week"] == "2021W02"
+    summary_call = next(call for call in meta_calls if "merge_summary" in call)
+    assert summary_call["merge_summary"]["total_weeks"] == 2

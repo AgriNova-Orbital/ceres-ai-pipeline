@@ -19,7 +19,7 @@ from modules.drive_oauth import (
     get_drive_service,
     list_folder_files,
 )
-from modules.merge_geotiffs import ingest_downloaded_geotiffs
+from modules.merge_geotiffs import _group_key, ingest_downloaded_geotiffs
 
 
 def _set_job_meta(**fields: Any) -> None:
@@ -205,6 +205,26 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     )
     bytes_done = 0
     start_ts = time.monotonic()
+    download_items = [
+        {
+            "id": getattr(f, "id", ""),
+            "name": getattr(f, "name", ""),
+            "size": getattr(f, "size", 0) or 0,
+            "week": _group_key(getattr(f, "name", "")),
+            "status": "queued",
+            "progress": 0,
+        }
+        for f in drive_files
+    ]
+    merge_events: list[dict[str, object]] = []
+    planned_weeks = sorted({item["week"] for item in download_items if item["week"]})
+
+    def _sync_download_item(file_name: str, **fields: Any) -> None:
+        for item in download_items:
+            if item["name"] == file_name:
+                item.update(fields)
+                break
+        _set_job_meta(download_items=download_items)
 
     def _on_chunk(n_bytes: int, current_file: str = "") -> None:
         nonlocal bytes_done
@@ -223,6 +243,28 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
             eta_seconds=eta_seconds,
             current_file=current_file,
         )
+        if current_file:
+            _sync_download_item(current_file, status="running", progress=progress)
+
+    def _on_merge_event(event: dict[str, object]) -> None:
+        merge_events.append(dict(event))
+        total_weeks = len(planned_weeks)
+        done_weeks = len(
+            {e.get("week") for e in merge_events if e.get("status") == "done"}
+        )
+        failed_weeks = len(
+            {e.get("week") for e in merge_events if e.get("status") == "failed"}
+        )
+        _set_job_meta(
+            merge_items=merge_events,
+            merge_summary={
+                "total_weeks": total_weeks,
+                "done_weeks": done_weeks,
+                "failed_weeks": failed_weeks,
+                "current_week": event.get("week"),
+                "current_mode": event.get("mode"),
+            },
+        )
 
     save_dir.mkdir(parents=True, exist_ok=True)
     _set_job_meta(
@@ -234,6 +276,15 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
         eta_seconds=None,
         total_files=len(drive_files),
         files_done=0,
+        download_items=download_items,
+        merge_items=[],
+        merge_summary={
+            "total_weeks": len(planned_weeks),
+            "done_weeks": 0,
+            "failed_weeks": 0,
+            "current_week": None,
+            "current_mode": None,
+        },
     )
 
     with DownloadProgress(total_bytes=total_size, total_files=len(drive_files)) as prog:
@@ -245,11 +296,13 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
                 _on_chunk(size, f.name)
                 prog.on_file_done(f.name, getattr(f, "size", 0) or 0)
                 _set_job_meta(files_done=i + 1)
+                _sync_download_item(f.name, status="done", progress=100)
                 continue
             _set_progress(
                 f"downloading {f.name}", int(5 + 85 * i / max(len(drive_files), 1))
             )
             prog.on_file_start(f.name, getattr(f, "size", 0) or 0)
+            _sync_download_item(f.name, status="running", progress=0)
             download_file(
                 svc,
                 file_id=f.id,
@@ -261,12 +314,15 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
             )
             prog.on_file_done(f.name, getattr(f, "size", 0) or 0)
             _set_job_meta(files_done=i + 1)
+            _sync_download_item(f.name, status="done", progress=100)
 
     _set_progress("ingesting", 95)
     result: dict[str, Any] = {"downloaded": len(drive_files), "total_size": total_size}
 
     try:
-        ingest_summary = ingest_downloaded_geotiffs(save_dir)
+        ingest_summary = ingest_downloaded_geotiffs(
+            save_dir, progress_callback=_on_merge_event
+        )
     except ImportError as e:
         ingest_summary = {
             "merged_weeks": [],

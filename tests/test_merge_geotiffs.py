@@ -117,3 +117,40 @@ def test_validate_canonical_geotiff_warns_when_band_descriptions_missing(
     report = validate_canonical_geotiff(tif_path)
 
     assert report["warnings"]
+
+
+
+def test_ingest_downloaded_geotiffs_reports_week_progress_callbacks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from modules.merge_geotiffs import ingest_downloaded_geotiffs
+
+    tile_a = tmp_path / "fr_wheat_feat_2021W01-0000000000-0000000000.tif"
+    tile_b = tmp_path / "fr_wheat_feat_2021W01-0000009984-0000000000.tif"
+    tile_c = tmp_path / "fr_wheat_feat_2021W02-0000000000-0000000000.tif"
+    tile_a.touch()
+    tile_b.touch()
+    tile_c.touch()
+
+    events: list[dict[str, object]] = []
+
+    monkeypatch.setattr(
+        "modules.merge_geotiffs._merge_into_canonical",
+        lambda *args, **kwargs: {"warnings": []},
+    )
+    monkeypatch.setattr(
+        "modules.merge_geotiffs._normalize_single_source",
+        lambda *args, **kwargs: {"warnings": []},
+    )
+
+    result = ingest_downloaded_geotiffs(
+        tmp_path,
+        progress_callback=lambda event: events.append(event),
+    )
+
+    assert result["merged_weeks"] == ["2021W01"]
+    assert result["single_tile_weeks_normalized"] == ["2021W02"]
+    assert [e["week"] for e in events if e["status"] == "started"] == ["2021W01", "2021W02"]
+    assert [e["status"] for e in events if e["week"] == "2021W01"][-1] == "done"
+    assert [e["mode"] for e in events if e["week"] == "2021W01"][-1] == "merge"
+    assert [e["mode"] for e in events if e["week"] == "2021W02"][-1] == "normalize"
