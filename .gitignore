@@ -154,6 +154,7 @@ venv.bak/
 .spyproject
 
 # Local data/artifacts
+state/
 data/
 !frontend/app/data/
 !frontend/app/data/**

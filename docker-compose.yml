@@ -14,6 +14,7 @@ services:
   web:
     build: .
     container_name: ceres-web
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "--access-logfile", "-", "--log-level", "debug", "apps.wheat_risk_webui:create_app()"]
     depends_on:
       redis:
@@ -26,7 +27,7 @@ services:
     expose:
       - "5055"
     volumes:
-      - app_state:/app/state
+      - ./state:/app/state
       - ./data:/app/data
       - ./runs:/app/runs
       - ./reports:/app/reports
@@ -48,6 +49,7 @@ services:
   worker:
     build: .
     container_name: ceres-worker
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
     depends_on:
       redis:
@@ -58,7 +60,7 @@ services:
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=DEBUG
     volumes:
-      - app_state:/app/state
+      - ./state:/app/state
       - ./data:/app/data
       - ./runs:/app/runs
       - ./reports:/app/reports
@@ -71,6 +73,3 @@ services:
                 - nvidia.com/gpu=all
               capabilities: [gpu]
     restart: unless-stopped
-
-volumes:
-  app_state:
