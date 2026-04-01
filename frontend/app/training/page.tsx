@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import FeedbackMessage from "@/components/FeedbackMessage";
+import SubmitButton from "@/components/SubmitButton";
 
 interface MatrixCell {
   level: number;
@@ -31,11 +33,18 @@ export default function TrainingPage() {
   const [batchSize, setBatchSize] = useState("8");
   const [lr, setLr] = useState("0.001");
   const [result, setResult] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [matrixCells, setMatrixCells] = useState<MatrixCell[]>([]);
   const [jobs, setJobs] = useState<JobInfo[]>([]);
+  const jobsInFlightRef = useRef(false);
 
-  // Build matrix cells from levels × steps
+
+  const hasActiveMatrixJobs = useMemo(
+    () => matrixCells.some((c) => c.status === "queued" || c.status === "running"),
+    [matrixCells]
+  );
+
   function buildMatrix() {
     const lvls = levels.split(",").map((s) => parseInt(s.trim())).filter(Boolean);
     const stps = steps.split(",").map((s) => parseInt(s.trim())).filter(Boolean);
@@ -51,21 +60,32 @@ export default function TrainingPage() {
 
   useEffect(() => { buildMatrix(); }, [levels, steps]);
 
-  // Poll jobs
   useEffect(() => {
     async function loadJobs() {
+      if (jobsInFlightRef.current) return;
+      jobsInFlightRef.current = true;
       try {
-        const res = await fetch("/api/jobs");
+        const res = await fetch("/api/jobs", { cache: "no-store" });
         const data = await res.json();
         setJobs(data.jobs || []);
-      } catch { /* */ }
+      } catch {
+        /* ignore */
+      } finally {
+        jobsInFlightRef.current = false;
+      }
     }
-    loadJobs();
-    const id = setInterval(loadJobs, 2000);
-    return () => clearInterval(id);
-  }, []);
 
-  // Update matrix cells from jobs
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (!hasActiveMatrixJobs) return;
+      loadJobs();
+    };
+
+    loadJobs();
+    const id = setInterval(tick, 12000);
+    return () => clearInterval(id);
+  }, [hasActiveMatrixJobs]);
+
   useEffect(() => {
     setMatrixCells((prev) =>
       prev.map((cell) => {
@@ -74,11 +94,10 @@ export default function TrainingPage() {
           (j) => j.description?.includes(cellDesc) || j.description?.includes(`train`)
         );
         if (matchJob) {
-          const prog = Number(matchJob.meta?.progress ?? 0);
-          const step = String(matchJob.meta?.step ?? matchJob.status);
           return {
             ...cell,
-            status: matchJob.status === "finished" ? "done" :
+            status:
+              matchJob.status === "finished" ? "done" :
               matchJob.status === "failed" ? "failed" :
               matchJob.status === "running" ? "running" : cell.status,
             jobId: matchJob.id,
@@ -93,6 +112,7 @@ export default function TrainingPage() {
   async function handleSubmit() {
     setLoading(true);
     setResult("");
+    setError("");
     try {
       const res = await fetch("/api/run/train", {
         method: "POST",
@@ -108,17 +128,21 @@ export default function TrainingPage() {
         }),
       });
       const data = await res.json();
-      setResult(res.ok ? `Queued: ${data.job_id}` : `Error: ${data.error}`);
       if (res.ok) {
-        // Mark all cells as queued
+        setResult(`Job queued: ${data.job_id}`);
         setMatrixCells((prev) => prev.map((c) => ({ ...c, status: "queued", jobId: data.job_id })));
+      } else {
+        setError(data.error || "Failed to submit training job");
       }
-    } catch { setResult("Connection error"); }
+    } catch {
+      setError("Connection error. Please check if the server is running.");
+    }
     setLoading(false);
   }
 
   async function handleRetry(cell: MatrixCell) {
     setLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/run/train", {
         method: "POST",
@@ -133,17 +157,22 @@ export default function TrainingPage() {
       const data = await res.json();
       if (res.ok) {
         setMatrixCells((prev) =>
-          prev.map((c) => c.level === cell.level && c.steps === cell.steps
-            ? { ...c, status: "queued", jobId: data.job_id, error: undefined }
-            : c)
+          prev.map((c) =>
+            c.level === cell.level && c.steps === cell.steps
+              ? { ...c, status: "queued", jobId: data.job_id, error: undefined }
+              : c
+          )
         );
+        setResult(`Retry queued: ${data.job_id}`);
+      } else {
+        setError(data.error || "Failed to retry");
       }
-    } catch { /* */ }
+    } catch {
+      setError("Connection error");
+    }
     setLoading(false);
   }
 
-  const lvls = levels.split(",").map((s) => parseInt(s.trim())).filter(Boolean);
-  const stps = steps.split(",").map((s) => parseInt(s.trim())).filter(Boolean);
   const doneCount = matrixCells.filter((c) => c.status === "done").length;
   const failCount = matrixCells.filter((c) => c.status === "failed").length;
   const runCount = matrixCells.filter((c) => c.status === "running").length;
@@ -151,69 +180,106 @@ export default function TrainingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
-          <h1 className="text-xl font-bold">Training Matrix</h1>
+      <header className="bg-white border-b px-4 sm:px-8 py-4">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-primary hover:underline text-sm">&larr; Home</Link>
+            <h1 className="text-xl font-bold">Training Matrix</h1>
+          </div>
+          <LogoutButton />
         </div>
-        <LogoutButton />
       </header>
 
       <main className="max-w-6xl mx-auto p-6 space-y-6">
+        {/* Feedback */}
+        {(result || error) && (
+          <FeedbackMessage
+            message={result || error}
+            type={result ? "success" : "error"}
+            onClear={() => { setResult(""); setError(""); }}
+          />
+        )}
+
         {/* Input Form */}
         <div className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
           <h2 className="text-lg font-semibold">Configuration</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Action</span>
-              <select value={action} onChange={(e) => setAction(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+              <select
+                value={action}
+                onChange={(e) => setAction(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              >
                 <option value="dry_run">Dry Run (preview)</option>
                 <option value="run_matrix">Run Matrix</option>
               </select>
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Levels</span>
-              <input value={levels} onChange={(e) => setLevels(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="1,2,4" />
+              <input
+                value={levels}
+                onChange={(e) => setLevels(e.target.value)}
+                placeholder="1,2,4"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              />
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Steps</span>
-              <input value={steps} onChange={(e) => setSteps(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="100,500,2000" />
+              <input
+                value={steps}
+                onChange={(e) => setSteps(e.target.value)}
+                placeholder="100,500,2000"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              />
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Device</span>
-              <select value={device} onChange={(e) => setDevice(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+              <select
+                value={device}
+                onChange={(e) => setDevice(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              >
                 <option value="cpu">CPU</option>
                 <option value="cuda">CUDA (GPU)</option>
               </select>
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Epochs</span>
-              <input type="number" value={epochs} onChange={(e) => setEpochs(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+              <input
+                type="number"
+                value={epochs}
+                onChange={(e) => setEpochs(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              />
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Batch Size</span>
-              <input type="number" value={batchSize} onChange={(e) => setBatchSize(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+              <input
+                type="number"
+                value={batchSize}
+                onChange={(e) => setBatchSize(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              />
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Learning Rate</span>
-              <input type="number" step="0.0001" value={lr} onChange={(e) => setLr(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+              <input
+                type="number"
+                step="0.0001"
+                value={lr}
+                onChange={(e) => setLr(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-primary focus:border-primary"
+              />
             </label>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={handleSubmit} disabled={loading}
-              className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50 text-sm font-medium">
-              {loading ? "Submitting..." : action === "dry_run" ? "Dry Run" : "Run Matrix"}
-            </button>
-            {result && (
-              <span className={`text-sm ${result.startsWith("Error") ? "text-red-600" : "text-green-600"}`}>{result}</span>
-            )}
+            <SubmitButton
+              loading={loading}
+              onClick={handleSubmit}
+              label={action === "dry_run" ? "Dry Run" : "Run Matrix"}
+              loadingLabel="Submitting\u2026"
+            />
           </div>
         </div>
 
@@ -242,19 +308,30 @@ export default function TrainingPage() {
           <div className="px-4 py-3 bg-gray-50 border-b flex justify-between items-center">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Matrix Status</h2>
             <div className="flex gap-2">
-              <a href="/runs/staged_final/summary.csv" target="_blank"
-                className="text-xs text-primary hover:underline px-2 py-1 border rounded">
+              <a
+                href="/runs/staged_final/summary.csv"
+                target="_blank"
+                className="text-xs text-primary hover:underline px-2 py-1 border rounded"
+              >
                 summary.csv
               </a>
-              <a href="/runs/staged_final/eval_metrics.csv" target="_blank"
-                className="text-xs text-primary hover:underline px-2 py-1 border rounded">
+              <a
+                href="/runs/staged_final/eval_metrics.csv"
+                target="_blank"
+                className="text-xs text-primary hover:underline px-2 py-1 border rounded"
+              >
                 eval_metrics.csv
               </a>
             </div>
           </div>
 
           {matrixCells.length === 0 ? (
-            <p className="p-8 text-center text-gray-400">Configure levels and steps above</p>
+            <div className="p-8 text-center">
+              <p className="text-gray-400 mb-2">No matrix cells configured</p>
+              <p className="text-xs text-gray-400">
+                Enter levels and steps above to configure the training matrix
+              </p>
+            </div>
           ) : (
             <table className="w-full text-sm min-w-[700px]">
               <thead className="bg-gray-50 border-b">
@@ -277,24 +354,29 @@ export default function TrainingPage() {
                       <td className="px-4 py-2 font-medium">L{cell.level}</td>
                       <td className="px-4 py-2">{cell.steps}</td>
                       <td className="px-4 py-2">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          cell.status === "done" ? "bg-green-100 text-green-800" :
-                          cell.status === "running" ? "bg-blue-100 text-blue-800 animate-pulse" :
-                          cell.status === "failed" ? "bg-red-100 text-red-800" :
-                          cell.status === "queued" ? "bg-yellow-100 text-yellow-800" :
-                          "bg-gray-100 text-gray-500"
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            cell.status === "done" ? "bg-green-100 text-green-800" :
+                            cell.status === "running" ? "bg-blue-100 text-blue-800 animate-pulse" :
+                            cell.status === "failed" ? "bg-red-100 text-red-800" :
+                            cell.status === "queued" ? "bg-yellow-100 text-yellow-800" :
+                            "bg-gray-100 text-gray-500"
+                          }`}
+                        >
                           {cell.status}
                         </span>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden w-24">
-                            <div className={`h-full rounded-full transition-all ${
-                              cell.status === "done" ? "bg-green-500" :
-                              cell.status === "failed" ? "bg-red-500" :
-                              "bg-blue-500"
-                            }`} style={{ width: `${progress}%` }} />
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                cell.status === "done" ? "bg-green-500" :
+                                cell.status === "failed" ? "bg-red-500" :
+                                "bg-blue-500"
+                              }`}
+                              style={{ width: `${progress}%` }}
+                            />
                           </div>
                           <span className="text-xs text-gray-500 w-10">{progress}%</span>
                         </div>
@@ -305,11 +387,18 @@ export default function TrainingPage() {
                       </td>
                       <td className="px-4 py-2">
                         {cell.status === "failed" && (
-                          <button onClick={() => handleRetry(cell)}
-                            className="text-xs text-red-600 hover:underline mr-2">Retry</button>
+                          <button
+                            onClick={() => handleRetry(cell)}
+                            disabled={loading}
+                            className="text-xs text-red-600 hover:underline mr-2 disabled:opacity-50"
+                          >
+                            Retry
+                          </button>
                         )}
                         {cell.error && (
-                          <span className="text-xs text-red-500 truncate max-w-32 block">{cell.error}</span>
+                          <span className="text-xs text-red-500 truncate max-w-32 block">
+                            {cell.error}
+                          </span>
                         )}
                       </td>
                     </tr>

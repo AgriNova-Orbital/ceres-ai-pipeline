@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import StatusBadge from "@/components/StatusBadge";
+import { formatTime, formatBytes, formatSpeed, formatEta } from "@/lib/utils";
 
 interface Job {
   id: string;
@@ -23,13 +25,6 @@ interface Worker {
   state: string;
   current_job: string | null;
 }
-
-const statusColors: Record<string, string> = {
-  queued: "bg-yellow-100 text-yellow-800",
-  running: "bg-blue-100 text-blue-800",
-  finished: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-};
 
 const sectionOrder = [
   "drive_download",
@@ -61,24 +56,34 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState("500");
   const [totalJobs, setTotalJobs] = useState(0);
+  const inFlightRef = useRef(false);
 
   async function load() {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
       const query = limit === "all" ? "/api/jobs?all=1" : `/api/jobs?limit=${limit}`;
-      const res = await fetch(query);
+      const res = await fetch(query, { cache: "no-store" });
       const data = await res.json();
       setJobs(data.jobs || []);
       setWorkers(data.workers || []);
       setTotalJobs(Number(data.total || 0));
     } catch {
       /* ignore */
+    } finally {
+      setLoading(false);
+      inFlightRef.current = false;
     }
-    setLoading(false);
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 2000);
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      load();
+    };
+
+    tick();
+    const id = setInterval(tick, 12000);
     return () => clearInterval(id);
   }, [limit]);
 
@@ -215,7 +220,18 @@ export default function JobsPage() {
           {loading ? (
             <div className="bg-white rounded-lg shadow-sm border p-8 text-center text-gray-400">Loading...</div>
           ) : groupedJobs.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border p-8 text-center text-gray-400">No jobs found</div>
+            <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
+              <p className="text-gray-400 mb-2">No jobs found</p>
+              <p className="text-xs text-gray-400 mb-4">
+                Jobs are created when you run operations from the pipeline pages.
+              </p>
+              <Link
+                href="/"
+                className="inline-block text-sm text-primary hover:underline"
+              >
+                Go to Dashboard to start a pipeline step \u2192
+              </Link>
+            </div>
           ) : (
             groupedJobs.map((group) => (
               <section key={group.key} className="bg-white rounded-lg shadow-sm border overflow-x-auto">
@@ -449,14 +465,6 @@ function GenericJobDetails({ job }: { job: Job }) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${statusColors[status] || "bg-gray-100 text-gray-600"}`}>
-      {status}
-    </span>
-  );
-}
-
 function normalizeDownloadStatus(status: string): string {
   if (status === "submitted") return "queued";
   if (status === "done") return "finished";
@@ -558,40 +566,4 @@ function TextBlock({ title, value, danger = false }: { title: string; value: str
 
 function ErrorBlock({ error }: { error: string }) {
   return <TextBlock title="Error" value={error} danger />;
-}
-
-function formatTime(iso: string): string {
-  if (!iso) return "-";
-  try {
-    return new Date(iso).toLocaleString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  } catch {
-    return iso;
-  }
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const mib = bytes / (1024 * 1024);
-  if (mib >= 1024) return `${(mib / 1024).toFixed(2)} GiB`;
-  if (mib >= 1) return `${mib.toFixed(2)} MiB`;
-  const kib = bytes / 1024;
-  if (kib >= 1) return `${kib.toFixed(1)} KiB`;
-  return `${bytes.toFixed(0)} B`;
-}
-
-function formatSpeed(speedBps: number): string {
-  if (!Number.isFinite(speedBps) || speedBps <= 0) return "0 B/s";
-  const mib = speedBps / (1024 * 1024);
-  if (mib >= 1) return `${mib.toFixed(2)} MiB/s`;
-  const kib = speedBps / 1024;
-  if (kib >= 1) return `${kib.toFixed(1)} KiB/s`;
-  return `${speedBps.toFixed(0)} B/s`;
-}
-
-function formatEta(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "0s";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
 }

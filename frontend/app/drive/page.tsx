@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import { summarizeWeekRange } from "@/lib/week-range";
+import { formatBytes, formatSpeed, formatEta } from "@/lib/utils";
 
 interface DriveFile {
   id: string;
@@ -45,6 +46,13 @@ export default function DrivePage() {
   const [rangeEnd, setRangeEnd] = useState("");
   const [onlySelectedRange, setOnlySelectedRange] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const jobsPollInFlightRef = useRef(false);
+
+
+  const hasActiveDownloads = useMemo(
+    () => downloads.some((d) => d.jobId && ["queued", "submitted", "running"].includes(d.status)),
+    [downloads]
+  );
 
   function addLog(line: string) {
     setLogLines((prev) => {
@@ -125,9 +133,12 @@ export default function DrivePage() {
 
   // Poll jobs for progress
   useEffect(() => {
-    const id = setInterval(async () => {
+    async function refreshProgress() {
+      if (!hasActiveDownloads) return;
+      if (jobsPollInFlightRef.current) return;
+      jobsPollInFlightRef.current = true;
       try {
-        const res = await fetch("/api/jobs");
+        const res = await fetch("/api/jobs", { cache: "no-store" });
         const data = await res.json();
         const jobs = data.jobs || [];
         setDownloads((prev) =>
@@ -149,10 +160,22 @@ export default function DrivePage() {
             return d;
           })
         );
-      } catch { /* */ }
-    }, 2000);
+      } catch {
+        /* ignore */
+      } finally {
+        jobsPollInFlightRef.current = false;
+      }
+    }
+
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      refreshProgress();
+    };
+
+    tick();
+    const id = setInterval(tick, 8000);
     return () => clearInterval(id);
-  }, []);
+  }, [hasActiveDownloads]);
 
   useEffect(() => { checkStatus(); }, []);
 
@@ -428,21 +451,4 @@ export default function DrivePage() {
       </div>
     </div>
   );
-}
-
-function formatSpeed(speedBps: number): string {
-  if (!speedBps || speedBps <= 0) return "0 B/s";
-  const mib = speedBps / (1024 * 1024);
-  if (mib >= 1) return `${mib.toFixed(2)} MiB/s`;
-  const kib = speedBps / 1024;
-  if (kib >= 1) return `${kib.toFixed(1)} KiB/s`;
-  return `${speedBps.toFixed(0)} B/s`;
-}
-
-function formatEta(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "0s";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
 }
