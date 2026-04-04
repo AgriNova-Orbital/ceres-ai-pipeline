@@ -73,7 +73,7 @@ export default function JobPanel() {
           {jobs.length === 0 ? (
             <div className="p-4 text-center">
               <p className="text-sm text-stone-400">No jobs yet</p>
-              <Link href="/" className="text-xs text-emerald-700 hover:underline dark:text-emerald-400">
+              <Link href="/dashboard" className="text-xs text-emerald-700 hover:underline dark:text-emerald-400">
                 Start a pipeline step
               </Link>
             </div>

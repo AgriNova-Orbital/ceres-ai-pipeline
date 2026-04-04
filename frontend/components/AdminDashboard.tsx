@@ -83,7 +83,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <header className="border-b border-stone-200 dark:border-stone-700 bg-white dark:border-stone-800 dark:bg-stone-900 px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <a href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</a>
+          <a href="/dashboard" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</a>
           <h1 className="text-xl font-bold">Admin Dashboard</h1>
         </div>
         <div className="flex items-center gap-3">

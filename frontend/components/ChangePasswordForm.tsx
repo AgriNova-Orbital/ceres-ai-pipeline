@@ -32,7 +32,7 @@ export default function ChangePasswordForm() {
         return;
       }
 
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setError("Connection error");

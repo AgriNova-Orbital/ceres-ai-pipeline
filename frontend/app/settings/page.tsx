@@ -63,7 +63,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <header className="border-b bg-white dark:border-stone-800 dark:bg-stone-900 px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</Link>
+          <Link href="/dashboard" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</Link>
           <h1 className="text-xl font-bold">Settings</h1>
         </div>
         <div className="flex items-center gap-2">

@@ -138,7 +138,7 @@ export default function JobsPage() {
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <header className="border-b bg-white dark:border-stone-800 dark:bg-stone-900 px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</Link>
+          <Link href="/dashboard" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</Link>
           <h1 className="text-xl font-bold">Jobs Monitor</h1>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -226,7 +226,7 @@ export default function JobsPage() {
                 Jobs are created when you run operations from the pipeline pages.
               </p>
               <Link
-                href="/"
+                href="/dashboard"
                 className="inline-block text-sm text-emerald-700 hover:underline dark:text-emerald-400"
               >
                 Go to Dashboard to start a pipeline step \u2192

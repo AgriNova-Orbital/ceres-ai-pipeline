@@ -40,7 +40,7 @@ export default function LoginForm() {
       if (data.requiresPasswordChange) {
         router.push("/change-password");
       } else {
-        router.push("/");
+        router.push("/dashboard");
       }
       router.refresh();
     } catch {

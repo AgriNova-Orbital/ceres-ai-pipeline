@@ -44,7 +44,7 @@ export default function RegisterPage() {
         setError(data.error || "Registration failed");
         return;
       }
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setError("Connection error");
