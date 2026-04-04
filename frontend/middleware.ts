@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/register", "/favicon.ico"];
+const PUBLIC_EXACT_PATHS = ["/", "/login", "/register", "/privacy", "/terms", "/favicon.ico"];
+const PUBLIC_PREFIX_PATHS = ["/logo/"];
 const API_PATHS = ["/api/", "/auth/"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip API, auth, and public paths
+  // Skip API/auth routes and explicitly public pages/assets
   if (
     API_PATHS.some((p) => pathname.startsWith(p)) ||
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p))
+    PUBLIC_EXACT_PATHS.includes(pathname) ||
+    PUBLIC_PREFIX_PATHS.some((p) => pathname.startsWith(p))
   ) {
     return NextResponse.next();
   }
@@ -28,13 +30,8 @@ export async function middleware(request: NextRequest) {
     }
 
     const data = await res.json();
-    if (
-      data.requiresPasswordChange &&
-      pathname !== "/change-password"
-    ) {
-      return NextResponse.redirect(
-        new URL("/change-password", request.url)
-      );
+    if (data.requiresPasswordChange && pathname !== "/change-password") {
+      return NextResponse.redirect(new URL("/change-password", request.url));
     }
   } catch {
     // Backend unavailable - redirect to login
