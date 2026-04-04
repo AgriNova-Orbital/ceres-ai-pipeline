@@ -48,50 +48,44 @@ export default function JobPanel() {
     <div className="fixed bottom-4 right-4 z-50">
       <button
         onClick={() => setOpen(!open)}
-        className="bg-primary text-white px-4 py-2 rounded-full shadow-lg text-sm hover:bg-primary-dark transition-colors flex items-center gap-2"
+        className="flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-sm text-white shadow-lg transition-colors hover:bg-emerald-800"
       >
         Jobs ({jobs.length})
         {runningCount > 0 && (
-          <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+          <span className="animate-pulse rounded-full bg-amber-300 px-1.5 py-0.5 text-xs font-bold text-amber-900">
             {runningCount}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute bottom-12 right-0 w-96 max-h-80 overflow-y-auto bg-white border rounded-lg shadow-xl">
-          <div className="p-3 border-b font-semibold text-sm flex justify-between items-center">
+        <div className="absolute bottom-12 right-0 max-h-80 w-96 overflow-y-auto rounded-lg border border-stone-200 bg-white shadow-xl dark:border-stone-700 dark:bg-stone-900">
+          <div className="flex items-center justify-between border-b border-stone-200 p-3 text-sm font-semibold dark:border-stone-700">
             <span>Job History</span>
             <div className="flex items-center gap-2">
-              <button
-                onClick={loadJobs}
-                className="text-primary text-xs hover:underline"
-              >
+              <button onClick={loadJobs} className="text-xs text-emerald-700 hover:underline dark:text-emerald-400">
                 Refresh
               </button>
-              <Link
-                href="/jobs"
-                className="text-primary text-xs hover:underline"
-              >
+              <Link href="/jobs" className="text-xs text-emerald-700 hover:underline dark:text-emerald-400">
                 View All
               </Link>
             </div>
           </div>
           {jobs.length === 0 ? (
             <div className="p-4 text-center">
-              <p className="text-gray-400 text-sm">No jobs yet</p>
-              <Link href="/" className="text-xs text-primary hover:underline">
+              <p className="text-sm text-stone-400">No jobs yet</p>
+              <Link href="/" className="text-xs text-emerald-700 hover:underline dark:text-emerald-400">
                 Start a pipeline step
               </Link>
             </div>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-stone-200 dark:divide-stone-700">
               {jobs.map((j) => (
                 <li key={j.id} className="px-3 py-2 text-xs">
-                  <div className="flex justify-between items-center">
+                  <div className="flex items-center justify-between">
                     <span className="font-medium">{j.section}</span>
                     <StatusBadge status={j.status} />
                   </div>
-                  <div className="text-gray-400 mt-0.5">
+                  <div className="mt-0.5 text-stone-500 dark:text-stone-400">
                     {j.action} &middot; {j.id?.slice(0, 8)}...
                   </div>
                 </li>

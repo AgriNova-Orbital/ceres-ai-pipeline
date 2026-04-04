@@ -51,10 +51,10 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-full max-w-sm p-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
+      <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-8 shadow-md dark:border-stone-700 dark:bg-stone-900">
         <h1 className="text-2xl font-bold text-center mb-2">Ceres AI Pipeline</h1>
-        <p className="text-gray-500 text-center mb-6">Sign in to continue</p>
+        <p className="mb-6 text-center text-stone-500 dark:text-stone-400">Sign in to continue</p>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
@@ -64,7 +64,7 @@ export default function LoginForm() {
 
         <form onSubmit={handleSubmit}>
           <label className="block mb-4">
-            <span className="text-sm font-medium text-gray-700">Username</span>
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-200">Username</span>
             <input
               type="text"
               value={username}
@@ -76,27 +76,27 @@ export default function LoginForm() {
           </label>
 
           <label className="block mb-6">
-            <span className="text-sm font-medium text-gray-700">Password</span>
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-200">Password</span>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+              className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-emerald-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
             />
           </label>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50 font-medium"
+            className="w-full rounded-md bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Login"}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-500">
-          No account? <a href="/register" className="text-primary hover:underline">Register</a>
+        <p className="mt-4 text-center text-sm text-stone-500 dark:text-stone-400">
+          No account? <a href="/register" className="text-emerald-700 hover:underline dark:text-emerald-400">Register</a>
         </p>
       </div>
     </div>

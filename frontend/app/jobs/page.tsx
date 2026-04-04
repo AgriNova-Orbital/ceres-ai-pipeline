@@ -135,41 +135,41 @@ export default function JobsPage() {
   }, [groupedJobs]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <header className="border-b bg-white dark:border-stone-800 dark:bg-stone-900 px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
+          <Link href="/" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</Link>
           <h1 className="text-xl font-bold">Jobs Monitor</h1>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select
             value={limit}
             onChange={(e) => setLimit(e.target.value)}
-            className="text-sm px-2 py-1 border rounded bg-white"
+            className="rounded border border-stone-300 bg-white px-2 py-1 text-sm dark:border-stone-600 dark:bg-stone-800"
           >
             <option value="100">100</option>
             <option value="500">500</option>
             <option value="1000">1000</option>
             <option value="all">All</option>
           </select>
-          <span className="text-xs text-gray-400">showing {jobs.length}/{totalJobs || jobs.length}</span>
-          <button onClick={load} className="text-sm px-3 py-1 border rounded hover:bg-gray-50">Refresh</button>
+          <span className="text-xs text-stone-400">showing {jobs.length}/{totalJobs || jobs.length}</span>
+          <button onClick={load} className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100 dark:border-stone-600 dark:hover:bg-stone-800">Refresh</button>
           <LogoutButton />
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
-        <section className="bg-white rounded-lg shadow-sm border p-4">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Workers</h2>
+        <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
+          <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">Workers</h2>
           {workers.length === 0 ? (
-            <p className="text-gray-400 text-sm">No workers connected</p>
+            <p className="text-stone-400 text-sm">No workers connected</p>
           ) : (
             <div className="flex gap-3 flex-wrap">
               {workers.map((w) => (
-                <div key={w.name} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded border">
+                <div key={w.name} className="flex items-center gap-2 px-3 py-2 rounded border bg-stone-50 dark:bg-stone-800">
                   <span className={`w-2 h-2 rounded-full ${w.state === "busy" ? "bg-yellow-500 animate-pulse" : "bg-green-500"}`} />
                   <span className="font-mono text-xs">{w.name}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${w.state === "busy" ? "bg-yellow-100 text-yellow-700" : "text-gray-400"}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${w.state === "busy" ? "bg-yellow-100 text-yellow-700" : "text-stone-400"}`}>
                     {w.state}
                   </span>
                 </div>
@@ -190,7 +190,7 @@ export default function JobsPage() {
               <button
                 key={t.key}
                 onClick={() => setStatusFilter(t.key)}
-                className={`px-3 py-1.5 text-sm rounded-md border ${statusFilter === t.key ? "bg-primary text-white border-primary" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                className={`px-3 py-1.5 text-sm rounded-md border ${statusFilter === t.key ? "bg-emerald-700 text-white border-emerald-700" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50 dark:bg-stone-900 dark:text-stone-200 dark:border-stone-700 dark:hover:bg-stone-800"}`}
               >
                 {t.label}
               </button>
@@ -205,7 +205,7 @@ export default function JobsPage() {
               <button
                 key={key}
                 onClick={() => setTypeFilter(key)}
-                className={`px-3 py-1.5 text-sm rounded-md border flex items-center gap-2 ${typeFilter === key ? `${meta.activeClass}` : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                className={`px-3 py-1.5 text-sm rounded-md border flex items-center gap-2 ${typeFilter === key ? `${meta.activeClass}` : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50 dark:bg-stone-900 dark:text-stone-200 dark:border-stone-700 dark:hover:bg-stone-800"}`}
               >
                 {key !== "all" && <span className={`inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded text-[10px] font-mono border ${meta.badgeClass}`}>{meta.badge}</span>}
                 {key === "all" ? `All Types (${typeCounts.all || 0})` : `${sectionLabels[key] || key} (${typeCounts[key] || 0})`}
@@ -218,62 +218,62 @@ export default function JobsPage() {
 
         <div className="space-y-6">
           {loading ? (
-            <div className="bg-white rounded-lg shadow-sm border p-8 text-center text-gray-400">Loading...</div>
+            <div className="rounded-lg border border-stone-200 bg-white p-8 text-center text-stone-400 shadow-sm dark:border-stone-700 dark:bg-stone-900">Loading...</div>
           ) : groupedJobs.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
-              <p className="text-gray-400 mb-2">No jobs found</p>
-              <p className="text-xs text-gray-400 mb-4">
+            <div className="rounded-lg border border-stone-200 bg-white p-8 text-center shadow-sm dark:border-stone-700 dark:bg-stone-900">
+              <p className="text-stone-400 mb-2">No jobs found</p>
+              <p className="text-xs text-stone-400 mb-4">
                 Jobs are created when you run operations from the pipeline pages.
               </p>
               <Link
                 href="/"
-                className="inline-block text-sm text-primary hover:underline"
+                className="inline-block text-sm text-emerald-700 hover:underline dark:text-emerald-400"
               >
                 Go to Dashboard to start a pipeline step \u2192
               </Link>
             </div>
           ) : (
             groupedJobs.map((group) => (
-              <section key={group.key} className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+              <section key={group.key} className="rounded-lg border border-stone-200 bg-white shadow-sm overflow-x-auto dark:border-stone-700 dark:bg-stone-900">
                 <button
                   onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.key]: !prev[group.key] }))}
-                  className="w-full px-4 py-3 border-b bg-gray-50 flex items-center justify-between text-left hover:bg-gray-100"
+                  className="w-full px-4 py-3 border-b bg-stone-50 dark:border-stone-700 dark:bg-stone-800 flex items-center justify-between text-left hover:bg-stone-100 dark:hover:bg-stone-700"
                 >
                   <div className="flex items-center gap-3">
                     <span className={`inline-flex items-center justify-center min-w-10 px-2 py-1 rounded text-[10px] font-mono border ${getSectionMeta(group.key).badgeClass}`}>
                       {getSectionMeta(group.key).badge}
                     </span>
-                    <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{group.label}</h2>
+                    <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-200 uppercase tracking-wide">{group.label}</h2>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">{group.jobs.length} jobs</span>
-                    <span className="text-gray-400 text-xs">{collapsedGroups[group.key] ? "[+]" : "[-]"}</span>
+                    <span className="text-xs text-stone-400">{group.jobs.length} jobs</span>
+                    <span className="text-stone-400 text-xs">{collapsedGroups[group.key] ? "[+]" : "[-]"}</span>
                   </div>
                 </button>
                 {!collapsedGroups[group.key] && (
                   <div className="divide-y min-w-[860px]">
                     {group.jobs.map((j) => (
-                    <div key={j.id} className="hover:bg-gray-50">
+                    <div key={j.id} className="hover:bg-stone-50 dark:hover:bg-stone-800">
                       <button
                         onClick={() => setExpanded(expanded === j.id ? null : j.id)}
                         className="w-full px-4 py-3 flex items-center gap-4 text-left text-sm"
                       >
-                        <span className="font-mono text-xs text-gray-400 w-20">{j.id.slice(0, 8)}</span>
+                        <span className="font-mono text-xs text-stone-400 w-20">{j.id.slice(0, 8)}</span>
                         <span className="w-28 flex items-center gap-2">
                           <span className={`inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded text-[10px] font-mono border ${getSectionMeta(j.section).badgeClass}`}>
                             {getSectionMeta(j.section).badge}
                           </span>
                           <span className="font-medium truncate">{sectionLabels[j.section] || j.section}</span>
                         </span>
-                        <span className="text-gray-500 w-40 truncate">{j.action}</span>
+                        <span className="text-stone-500 dark:text-stone-400 w-40 truncate">{j.action}</span>
                         <StatusBadge status={j.status} />
                         {j.status === "running" && j.meta?.progress != null && (
                           <ProgressBar pct={Number(j.meta.progress)} step={String(j.meta.step ?? "")} />
                         )}
                         {j.status === "queued" && (
-                          <span className="text-xs text-gray-400 italic">waiting for worker</span>
+                          <span className="text-xs text-stone-400 italic">waiting for worker</span>
                         )}
-                        <span className="text-gray-400 text-xs ml-auto">{formatTime(j.enqueued_at)}</span>
+                        <span className="text-stone-400 text-xs ml-auto">{formatTime(j.enqueued_at)}</span>
                         <span className="text-gray-300">{expanded === j.id ? "▲" : "▼"}</span>
                       </button>
 
@@ -367,9 +367,9 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
 
       {downloadItems.length > 0 && (
         <div>
-          <p className="text-gray-500 text-xs font-medium mb-2">Download Items</p>
+          <p className="text-stone-500 dark:text-stone-400 text-xs font-medium mb-2">Download Items</p>
           <div className="border rounded-md overflow-hidden">
-            <div className="grid grid-cols-[1.5fr_100px_100px_1fr] gap-2 px-3 py-2 bg-gray-50 text-[11px] text-gray-500 font-medium">
+            <div className="grid grid-cols-[1.5fr_100px_100px_1fr] gap-2 px-3 py-2 bg-stone-50 dark:bg-stone-800 text-[11px] text-stone-500 dark:text-stone-400 font-medium">
               <span>File / Week</span>
               <span>Status</span>
               <span>Size</span>
@@ -383,15 +383,15 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
                   <div key={`${item.name}-${idx}`} className="grid grid-cols-[1.5fr_100px_100px_1fr] gap-2 px-3 py-2 text-xs">
                     <div className="min-w-0">
                       <div className="font-mono truncate">{String(item.name ?? "")}</div>
-                      <div className="text-gray-400">{String(item.week ?? "-")}</div>
+                      <div className="text-stone-400">{String(item.week ?? "-")}</div>
                     </div>
                     <div><StatusBadge status={normalizeDownloadStatus(itemStatus)} /></div>
-                    <div className="text-gray-500">{formatBytes(Number(item.size ?? 0))}</div>
+                    <div className="text-stone-500 dark:text-stone-400">{formatBytes(Number(item.size ?? 0))}</div>
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(itemProgress, 100)}%` }} />
+                      <div className="flex-1 h-2 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${Math.min(itemProgress, 100)}%` }} />
                       </div>
-                      <span className="text-[11px] text-gray-500 w-10">{itemProgress}%</span>
+                      <span className="text-[11px] text-stone-500 dark:text-stone-400 w-10">{itemProgress}%</span>
                     </div>
                   </div>
                 );
@@ -403,7 +403,7 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
 
       {(mergeItems.length > 0 || Object.keys(mergeSummary).length > 0) && (
         <div>
-          <p className="text-gray-500 text-xs font-medium mb-2">Weekly Merge Progress</p>
+          <p className="text-stone-500 dark:text-stone-400 text-xs font-medium mb-2">Weekly Merge Progress</p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
             {mergeSummary.total_weeks != null && <InfoRow label="Total Weeks" value={String(mergeSummary.total_weeks)} />}
             {mergeSummary.done_weeks != null && <InfoRow label="Done Weeks" value={String(mergeSummary.done_weeks)} />}
@@ -411,7 +411,7 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
             {mergeSummary.current_week != null && <InfoRow label="Current Week" value={`${String(mergeSummary.current_week)} (${String(mergeSummary.current_mode ?? "")})`} />}
           </div>
           <div className="border rounded-md overflow-hidden">
-            <div className="grid grid-cols-[120px_120px_120px_1fr] gap-2 px-3 py-2 bg-gray-50 text-[11px] text-gray-500 font-medium">
+            <div className="grid grid-cols-[120px_120px_120px_1fr] gap-2 px-3 py-2 bg-stone-50 dark:bg-stone-800 text-[11px] text-stone-500 dark:text-stone-400 font-medium">
               <span>Week</span>
               <span>Mode</span>
               <span>Status</span>
@@ -423,7 +423,7 @@ function DriveJobDetails({ job, resultObj }: { job: Job; resultObj: Record<strin
                   <span className="font-mono">{String(item.week ?? "-")}</span>
                   <span>{String(item.mode ?? "-")}</span>
                   <span><StatusBadge status={normalizeMergeStatus(String(item.status ?? "queued"))} /></span>
-                  <span className="text-gray-500 break-all">{item.error ? String(item.error) : `${String(item.file_count ?? 0)} file(s)`}</span>
+                  <span className="text-stone-500 dark:text-stone-400 break-all">{item.error ? String(item.error) : `${String(item.file_count ?? 0)} file(s)`}</span>
                 </div>
               ))}
             </div>
@@ -442,8 +442,8 @@ function ScriptJobDetails({ job, resultObj }: { job: Job; resultObj: Record<stri
     <div className="space-y-3">
       {resultObj?.cmd && (
         <div>
-          <p className="text-gray-500 text-xs font-medium mb-1">Command</p>
-          <pre className="bg-gray-50 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">{Array.isArray(resultObj.cmd) ? resultObj.cmd.join(" ") : String(resultObj.cmd)}</pre>
+          <p className="text-stone-500 dark:text-stone-400 text-xs font-medium mb-1">Command</p>
+          <pre className="bg-stone-50 dark:bg-stone-800 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap">{Array.isArray(resultObj.cmd) ? resultObj.cmd.join(" ") : String(resultObj.cmd)}</pre>
         </div>
       )}
       {resultObj?.cwd && <InfoRow label="Working Dir" value={String(resultObj.cwd)} />}
@@ -511,12 +511,12 @@ function getSectionMeta(section: string) {
     },
     unknown: {
       badge: "???",
-      badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
+      badgeClass: "bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-200 border-gray-200",
       activeClass: "bg-gray-700 text-white border-gray-700",
     },
     all: {
       badge: "ALL",
-      badgeClass: "bg-gray-50 text-gray-700 border-gray-200",
+      badgeClass: "bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-200 border-gray-200",
       activeClass: "bg-slate-900 text-white border-slate-900",
     },
   };
@@ -526,11 +526,11 @@ function getSectionMeta(section: string) {
 function ProgressBar({ pct, step }: { pct: number; step?: string }) {
   return (
     <div className="flex items-center gap-2 flex-1 max-w-xs">
-      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-        <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
+      <div className="flex-1 h-2 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+        <div className="h-full bg-emerald-600 rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <span className="text-xs text-gray-500 whitespace-nowrap">{pct}%</span>
-      {step && <span className="text-xs text-gray-400 truncate max-w-24">{step}</span>}
+      <span className="text-xs text-stone-500 dark:text-stone-400 whitespace-nowrap">{pct}%</span>
+      {step && <span className="text-xs text-stone-400 truncate max-w-24">{step}</span>}
     </div>
   );
 }
@@ -538,7 +538,7 @@ function ProgressBar({ pct, step }: { pct: number; step?: string }) {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2 flex-wrap">
-      <span className="text-gray-500 text-xs w-24">{label}:</span>
+      <span className="text-stone-500 dark:text-stone-400 text-xs w-24">{label}:</span>
       <span className="text-gray-800 text-xs break-all">{value}</span>
     </div>
   );
@@ -547,8 +547,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function JsonBlock({ title, value }: { title: string; value: unknown }) {
   return (
     <div>
-      <p className="text-gray-500 text-xs font-medium mb-1">{title}</p>
-      <pre className="bg-gray-50 p-2 rounded text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>
+      <p className="text-stone-500 dark:text-stone-400 text-xs font-medium mb-1">{title}</p>
+      <pre className="bg-stone-50 dark:bg-stone-800 p-2 rounded text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">{typeof value === "string" ? value : JSON.stringify(value, null, 2)}</pre>
     </div>
   );
 }
@@ -556,8 +556,8 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
 function TextBlock({ title, value, danger = false }: { title: string; value: string; danger?: boolean }) {
   return (
     <div>
-      <p className={`text-xs font-medium mb-1 ${danger ? "text-red-600" : "text-gray-500"}`}>{title}</p>
-      <pre className={`${danger ? "bg-red-50 text-red-700" : "bg-gray-50 text-gray-800"} p-2 rounded text-xs overflow-x-auto max-h-40 whitespace-pre-wrap`}>
+      <p className={`text-xs font-medium mb-1 ${danger ? "text-red-600" : "text-stone-500 dark:text-stone-400"}`}>{title}</p>
+      <pre className={`${danger ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" : "bg-stone-50 dark:bg-stone-800 text-gray-800"} p-2 rounded text-xs overflow-x-auto max-h-40 whitespace-pre-wrap`}>
         {value}
       </pre>
     </div>
