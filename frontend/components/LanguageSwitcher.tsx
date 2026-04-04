@@ -23,7 +23,7 @@ export default function LanguageSwitcher() {
       type="button"
       onClick={toggleLocale}
       aria-label="Switch language"
-      className="rounded-md border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/10"
+      className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
     >
       {locale === "zh-TW" ? "EN" : "繁中"}
     </button>
