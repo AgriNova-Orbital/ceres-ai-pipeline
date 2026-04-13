@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ThemeBoot from "@/components/ThemeBoot";
 
 export const metadata: Metadata = {
   title: "Ceres AI Pipeline",
@@ -18,7 +19,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ThemeBoot />
+        {children}
+      </body>
     </html>
   );
 }

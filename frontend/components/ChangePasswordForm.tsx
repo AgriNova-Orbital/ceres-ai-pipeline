@@ -32,7 +32,7 @@ export default function ChangePasswordForm() {
         return;
       }
 
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setError("Connection error");
@@ -42,10 +42,10 @@ export default function ChangePasswordForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-full max-w-sm p-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
+      <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-8 shadow-md dark:border-stone-700 dark:bg-stone-900">
         <h1 className="text-2xl font-bold text-center mb-2">Change Password</h1>
-        <p className="text-gray-500 text-center mb-6">
+        <p className="text-center mb-6 text-stone-500 dark:text-stone-400">
           Please set a new password before continuing.
         </p>
 
@@ -57,7 +57,7 @@ export default function ChangePasswordForm() {
 
         <form onSubmit={handleSubmit}>
           <label className="block mb-4">
-            <span className="text-sm font-medium text-gray-700">New Password</span>
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-200">New Password</span>
             <input
               type="password"
               value={newPassword}
@@ -65,25 +65,25 @@ export default function ChangePasswordForm() {
               required
               minLength={4}
               autoFocus
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+              className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-emerald-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
             />
           </label>
 
           <label className="block mb-6">
-            <span className="text-sm font-medium text-gray-700">Confirm Password</span>
+            <span className="text-sm font-medium text-stone-700 dark:text-stone-200">Confirm Password</span>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+              className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-emerald-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
             />
           </label>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50 font-medium"
+            className="w-full rounded-md bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {loading ? "Updating..." : "Update Password"}
           </button>

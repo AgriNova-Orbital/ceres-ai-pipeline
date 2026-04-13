@@ -11,11 +11,13 @@ services:
       timeout: 3s
       retries: 5
 
-  web:
-    build: .
-    container_name: ceres-web
+  web-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      target: dev
+    container_name: ceres-web-dev
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
-    command: ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "--access-logfile", "-", "--log-level", "debug", "apps.wheat_risk_webui:create_app()"]
     depends_on:
       redis:
         condition: service_healthy
@@ -23,9 +25,10 @@ services:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
       - PYTHONUNBUFFERED=1
-      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-default-secret}
-    expose:
-      - "5055"
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-dev-secret}
+      - RQ_LOG_LEVEL=DEBUG
+    ports:
+      - "5055:5055"
     volumes:
       - ./state:/app/state
       - ./data:/app/data
@@ -34,21 +37,12 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
 
-  frontend:
+  worker-dev:
+    profiles: ["dev"]
     build:
-      context: ./frontend
-    container_name: ceres-frontend
-    depends_on:
-      - web
-    environment:
-      - API_URL=http://web:5055
-    ports:
-      - "3002:3000"
-    restart: unless-stopped
-
-  worker:
-    build: .
-    container_name: ceres-worker
+      context: .
+      target: dev
+    container_name: ceres-worker-dev
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
     depends_on:
@@ -65,11 +59,143 @@ services:
       - ./runs:/app/runs
       - ./reports:/app/reports
       - ./logs:/app/logs
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - device_ids:
-                - nvidia.com/gpu=all
-              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./frontend
+    container_name: ceres-frontend-dev
+    depends_on:
+      - web-dev
+    environment:
+      - API_URL=http://web-dev:5055
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+
+  web-beta:
+    profiles: ["beta"]
+    build:
+      context: .
+      target: beta
+    container_name: ceres-web-beta
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-beta-secret}
+      - RQ_LOG_LEVEL=INFO
+    ports:
+      - "5155:5055"
+    volumes:
+      - ./state:/app/state
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  worker-beta:
+    profiles: ["beta"]
+    build:
+      context: .
+      target: beta
+    container_name: ceres-worker-beta
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+      - RQ_LOG_LEVEL=INFO
+    volumes:
+      - ./state:/app/state
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  frontend-beta:
+    profiles: ["beta"]
+    build:
+      context: ./frontend
+    container_name: ceres-frontend-beta
+    depends_on:
+      - web-beta
+    environment:
+      - API_URL=http://web-beta:5055
+    ports:
+      - "3102:3000"
+    restart: unless-stopped
+
+  web-release:
+    profiles: ["release"]
+    build:
+      context: .
+      target: release
+    container_name: ceres-web-release
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-release-secret}
+      - RQ_LOG_LEVEL=WARNING
+    ports:
+      - "5255:5055"
+    volumes:
+      - ./state:/app/state
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  worker-release:
+    profiles: ["release"]
+    build:
+      context: .
+      target: release
+    container_name: ceres-worker-release
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+      - RQ_LOG_LEVEL=WARNING
+    volumes:
+      - ./state:/app/state
+      - ./data:/app/data
+      - ./runs:/app/runs
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  frontend-release:
+    profiles: ["release"]
+    build:
+      context: ./frontend
+    container_name: ceres-frontend-release
+    depends_on:
+      - web-release
+    environment:
+      - API_URL=http://web-release:5055
+    ports:
+      - "3202:3000"
     restart: unless-stopped

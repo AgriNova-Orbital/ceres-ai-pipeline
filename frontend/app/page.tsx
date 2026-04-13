@@ -1,218 +1,74 @@
 import Link from "next/link";
-import LogoutButton from "@/components/LogoutButton";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import ThemeSwitcher from "@/components/ThemeSwitcher";
 import LocaleText from "@/components/LocaleText";
 import BrandLogo from "@/components/BrandLogo";
 
-interface Section {
-  title: string;
-  desc: string;
-  href: string;
-  step: number;
-}
-
-interface PipelineGroup {
-  label: string;
-  icon: string;
-  color: string;
-  sections: Section[];
-}
-
-const groups: PipelineGroup[] = [
-  {
-    label: "Setup & Configuration",
-    icon: "⚙",
-    color: "from-slate-500 to-gray-500",
-    sections: [{ title: "Settings", desc: "Google OAuth, configuration", href: "/settings", step: 1 }],
-  },
-  {
-    label: "Data Acquisition",
-    icon: "⬇",
-    color: "from-sky-500 to-cyan-500",
-    sections: [
-      { title: "Google Drive", desc: "Browse and download from Google Drive", href: "/drive", step: 2 },
-      { title: "Downloader", desc: "Download weekly Sentinel-2 rasters from Earth Engine", href: "/downloader", step: 3 },
-    ],
-  },
-  {
-    label: "Data Processing",
-    icon: "🧩",
-    color: "from-amber-500 to-orange-500",
-    sections: [
-      { title: "Data Ingest", desc: "Normalize and merge weekly GeoTIFFs", href: "/ingest", step: 4 },
-      { title: "Data Browser", desc: "Browse raw GeoTIFFs, patches, runs, reports", href: "/data", step: 5 },
-      { title: "Build Dataset", desc: "Build staged patches from raw data", href: "/build", step: 6 },
-    ],
-  },
-  {
-    label: "Model Training",
-    icon: "🧠",
-    color: "from-violet-500 to-fuchsia-500",
-    sections: [
-      { title: "Training", desc: "Configure and run LSTM model training", href: "/training", step: 7 },
-      { title: "Evaluation", desc: "Evaluate model performance and metrics", href: "/evaluation", step: 8 },
-    ],
-  },
-  {
-    label: "Tools & Monitoring",
-    icon: "📊",
-    color: "from-emerald-500 to-teal-500",
-    sections: [
-      { title: "Admin Dashboard", desc: "System overview, workers, queue, storage", href: "/admin", step: 0 },
-      { title: "Jobs Monitor", desc: "All submitted and completed jobs", href: "/jobs", step: 0 },
-      { title: "Inventory", desc: "Refresh data inventory catalog", href: "/inventory", step: 0 },
-      { title: "Preview", desc: "Preview raster and patch data as images", href: "/preview", step: 0 },
-    ],
-  },
-];
-
-export default function Home() {
+export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-8">
+    <div className="min-h-screen bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+      <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-stone-50/95 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-8">
           <div className="flex items-center gap-3">
             <BrandLogo src="/logo/logo-square.png" alt="Ceres AI logo" className="h-9 w-9 rounded-md object-contain" fallback="🌾" />
             <div>
-              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Ceres AI Pipeline</h1>
-              <p className="mt-0.5 text-xs text-slate-300 sm:text-sm">Wheat Risk Assessment · Geospatial ML Pipeline</p>
+              <h1 className="text-lg font-bold tracking-tight sm:text-xl">Ceres AI</h1>
+              <p className="text-xs text-stone-600 dark:text-stone-400">Geospatial ML Pipeline Platform</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeSwitcher />
             <LanguageSwitcher />
-            <LogoutButton />
+            <Link href="/login" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800">
+              Login
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-6xl space-y-8 overflow-hidden px-4 py-8 sm:px-8 sm:py-10">
-        <div className="pointer-events-none absolute -top-20 -left-12 h-64 w-64 rounded-full bg-sky-500/20 blur-3xl motion-safe:animate-floatSlow" />
-        <div className="pointer-events-none absolute top-20 right-0 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl motion-safe:animate-floatFast" />
+      <main>
+        <section className="relative overflow-hidden border-b border-stone-200 bg-gradient-to-br from-emerald-100 via-stone-50 to-amber-100 dark:border-stone-800 dark:from-emerald-950 dark:via-stone-950 dark:to-amber-950">
+          <div className="pointer-events-none absolute -top-16 right-0 h-64 w-64 rounded-full bg-emerald-300/40 blur-3xl dark:bg-emerald-800/30" />
+          <div className="pointer-events-none absolute bottom-0 left-10 h-52 w-52 rounded-full bg-amber-300/40 blur-3xl dark:bg-amber-900/30" />
 
-        <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 shadow-2xl sm:p-8">
-          <div className="relative z-10 max-w-3xl">
-            <div className="mb-3 flex items-center gap-3">
-              <BrandLogo src="/logo/logo.png" alt="Ceres AI wordmark" className="h-8 w-auto object-contain" fallback="Ceres AI" />
-              <p className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
+          <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-8 sm:py-24">
+            <div className="max-w-3xl space-y-6">
+              <p className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
                 Ceres AI / 穀神星AI
               </p>
-            </div>
-            <h2 className="text-2xl font-semibold leading-tight sm:text-3xl">一站式農業遙測 AI 工作台</h2>
-            <p className="mt-3 text-sm text-slate-300 sm:text-base">
-              從資料抓取、預處理、建模訓練到評估監控，快速完成端到端 pipeline。
-            </p>
-            <div className="mt-5">
-              <p className="mb-2 text-xs uppercase tracking-wider text-slate-400">
-                <LocaleText k="quickActions" fallback="Quick Actions" />
+              <h2 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+                Build crop-risk intelligence with production-ready geospatial AI.
+              </h2>
+              <p className="max-w-2xl text-base text-stone-700 dark:text-stone-300 sm:text-lg">
+                這是公開展示首頁。登入後可進入完整操作面板，執行資料抓取、資料建置、模型訓練與評估流程。
               </p>
+
               <div className="flex flex-wrap gap-3">
-                <Link href="/training" className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400">
-                  <LocaleText k="startTraining" fallback="Start Training" />
+                <Link href="/login" className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">
+                  Sign in
                 </Link>
-                <Link href="/jobs" className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">
-                  <LocaleText k="viewJobs" fallback="View Jobs" />
-                </Link>
-                <Link href="/settings" className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10">
-                  <LocaleText k="openSettings" fallback="Open Settings" />
+                <Link href="/dashboard" className="rounded-lg border border-stone-300 bg-white px-5 py-2.5 text-sm font-semibold text-stone-800 transition hover:border-stone-400 hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800">
+                  Open Dashboard
                 </Link>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="space-y-6">
-          {groups.map((group, groupIndex) => (
-            <div key={group.label} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{group.icon}</span>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-300 sm:text-sm">{group.label}</h3>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {group.sections.map((s, idx) => {
-                  const delay = `${groupIndex * 90 + idx * 60}ms`;
-                  return (
-                    <Link
-                      key={s.href}
-                      href={s.href}
-                      style={{ animationDelay: delay }}
-                      className="group motion-safe:animate-cardIn rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-lg backdrop-blur transition hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.06]"
-                    >
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <h4 className="text-base font-semibold text-white transition-colors group-hover:text-cyan-300">{s.title}</h4>
-                        {s.step > 0 ? (
-                          <span className={`rounded-full bg-gradient-to-r ${group.color} px-2 py-0.5 text-xs font-semibold text-white shadow`}>
-                            Step {s.step}
-                          </span>
-                        ) : (
-                          <span className="rounded-full border border-white/20 px-2 py-0.5 text-xs text-slate-300">Tool</span>
-                        )}
-                      </div>
-                      <p className="text-sm leading-6 text-slate-300">{s.desc}</p>
-                    </Link>
-                  );
-                })}
-              </div>
+        <footer className="border-t border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-950">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-stone-500 dark:text-stone-400 sm:px-8">
+            <p>© {new Date().getFullYear()} Ceres AI</p>
+            <div className="flex items-center gap-4">
+              <Link href="/privacy" className="hover:text-emerald-700 hover:underline dark:hover:text-emerald-400">
+                <LocaleText k="privacyPolicy" fallback="Privacy Policy" />
+              </Link>
+              <Link href="/terms" className="hover:text-emerald-700 hover:underline dark:hover:text-emerald-400">
+                <LocaleText k="termsOfService" fallback="Terms of Service" />
+              </Link>
             </div>
-          ))}
-        </section>
-
-        <footer className="border-t border-white/10 pt-5 text-sm text-slate-300">
-          <div className="flex flex-wrap items-center gap-4">
-            <Link href="/privacy" className="hover:text-cyan-300 hover:underline">
-              <LocaleText k="privacyPolicy" fallback="Privacy Policy" />
-            </Link>
-            <Link href="/terms" className="hover:text-cyan-300 hover:underline">
-              <LocaleText k="termsOfService" fallback="Terms of Service" />
-            </Link>
           </div>
         </footer>
       </main>
-
-      <style jsx global>{`
-        @keyframes cardIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes floatSlow {
-          0%,
-          100% {
-            transform: translate(0, 0);
-          }
-          50% {
-            transform: translate(12px, -10px);
-          }
-        }
-
-        @keyframes floatFast {
-          0%,
-          100% {
-            transform: translate(0, 0);
-          }
-          50% {
-            transform: translate(-14px, 10px);
-          }
-        }
-
-        .animate-cardIn {
-          animation: cardIn 480ms ease both;
-        }
-
-        .animate-floatSlow {
-          animation: floatSlow 9s ease-in-out infinite;
-        }
-
-        .animate-floatFast {
-          animation: floatFast 7s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 }

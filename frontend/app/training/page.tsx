@@ -183,7 +183,7 @@ export default function TrainingPage() {
       <header className="bg-white border-b px-4 sm:px-8 py-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-primary hover:underline text-sm">&larr; Home</Link>
+            <Link href="/dashboard" className="text-primary hover:underline text-sm">&larr; Home</Link>
             <h1 className="text-xl font-bold">Training Matrix</h1>
           </div>
           <LogoutButton />

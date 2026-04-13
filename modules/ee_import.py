@@ -15,7 +15,7 @@ def require_ee(feature: str) -> Any:
         raise RuntimeError(
             "Google Earth Engine Python API (earthengine-api) is required for "
             f"{feature}. Install it and authenticate:\n"
-            "  pip install earthengine-api\n"
+            "  uv add earthengine-api\n"
             "  earthengine authenticate"
         ) from e
 

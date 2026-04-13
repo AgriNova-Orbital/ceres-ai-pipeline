@@ -80,20 +80,20 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <header className="border-b border-stone-200 dark:border-stone-700 bg-white dark:border-stone-800 dark:bg-stone-900 px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <a href="/" className="text-primary hover:underline">&larr; Home</a>
+          <a href="/dashboard" className="text-emerald-700 hover:underline dark:text-emerald-400">&larr; Home</a>
           <h1 className="text-xl font-bold">Admin Dashboard</h1>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={loadAll} className="text-sm px-3 py-1 border rounded hover:bg-gray-50">Refresh</button>
+          <button onClick={loadAll} className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100 dark:border-stone-600 dark:hover:bg-stone-800">Refresh</button>
           <LogoutBtn />
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {error && <div className="p-3 bg-red-50 text-red-700 rounded">{error}</div>}
+        {error && <div className="rounded bg-red-50 p-3 text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
 
         {/* System Overview */}
         <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -111,11 +111,11 @@ export default function AdminDashboard() {
           {/* Workers */}
           <Card title="RQ Workers" badge={workers.length.toString()}>
             {workers.length === 0 ? (
-              <p className="text-gray-400 text-sm">No workers connected</p>
+              <p className="text-stone-400 text-sm">No workers connected</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-500 border-b">
+                  <tr className="text-left text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
                     <th className="pb-2">Name</th>
                     <th className="pb-2">State</th>
                     <th className="pb-2">Current Job</th>
@@ -123,10 +123,10 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody>
                   {workers.map((w) => (
-                    <tr key={w.name} className="border-b last:border-0">
+                    <tr key={w.name} className="border-b border-stone-200 dark:border-stone-700 last:border-0">
                       <td className="py-2 font-mono text-xs">{w.name.slice(0, 16)}...</td>
                       <td className="py-2">
-                        <span className={`px-2 py-0.5 rounded text-xs ${w.state === "busy" ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                        <span className={`px-2 py-0.5 rounded text-xs ${w.state === "busy" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"}`}>
                           {w.state}
                         </span>
                       </td>
@@ -142,12 +142,12 @@ export default function AdminDashboard() {
           <Card title="Job Queue">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-3xl font-bold text-primary">{queue?.length ?? "-"}</p>
-                <p className="text-sm text-gray-500">Pending Jobs</p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{queue?.length ?? "-"}</p>
+                <p className="text-sm text-stone-500 dark:text-stone-400">Pending Jobs</p>
               </div>
               <div>
                 <p className="text-3xl font-bold">{queue?.name ?? "-"}</p>
-                <p className="text-sm text-gray-500">Queue Name</p>
+                <p className="text-sm text-stone-500 dark:text-stone-400">Queue Name</p>
               </div>
             </div>
           </Card>
@@ -177,10 +177,10 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {data &&
                 Object.entries(data).map(([name, info]) => (
-                  <div key={name} className="text-center p-3 bg-gray-50 rounded">
+                  <div key={name} className="text-center p-3 bg-stone-50 rounded dark:bg-stone-800">
                     <p className="text-2xl font-bold">{info.size_mb} MB</p>
-                    <p className="text-sm text-gray-500">{name}/</p>
-                    <p className="text-xs text-gray-400">{info.total_files} files</p>
+                    <p className="text-sm text-stone-500 dark:text-stone-400">{name}/</p>
+                    <p className="text-xs text-stone-400">{info.total_files} files</p>
                   </div>
                 ))}
             </div>
@@ -192,22 +192,22 @@ export default function AdminDashboard() {
 }
 
 function StatCard({ title, value, subtitle, color }: { title: string; value: string | number; subtitle?: string; color?: string }) {
-  const colorClass = color === "green" ? "text-green-600" : color === "red" ? "text-red-600" : "text-gray-900";
+  const colorClass = color === "green" ? "text-green-600" : color === "red" ? "text-red-600" : "text-stone-900 dark:text-stone-100";
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-4">
-      <p className="text-sm text-gray-500">{title}</p>
+    <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
+      <p className="text-sm text-stone-500 dark:text-stone-400">{title}</p>
       <p className={`text-2xl font-bold ${colorClass}`}>{value}</p>
-      {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-stone-400">{subtitle}</p>}
     </div>
   );
 }
 
 function Card({ title, badge, children, className }: { title: string; badge?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-lg shadow-sm border p-6 ${className || ""}`}>
+    <div className={`rounded-lg border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-700 dark:bg-stone-900 ${className || ""}`}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{title}</h2>
-        {badge && <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">{badge}</span>}
+        {badge && <span className="text-xs bg-emerald-700 text-white px-2 py-0.5 rounded-full">{badge}</span>}
       </div>
       {children}
     </div>
@@ -217,7 +217,7 @@ function Card({ title, badge, children, className }: { title: string; badge?: st
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="text-gray-500">{label}: </span>
+      <span className="text-stone-500 dark:text-stone-400">{label}: </span>
       <span className="font-medium">{value}</span>
     </div>
   );
@@ -229,7 +229,7 @@ function LogoutBtn() {
     window.location.href = "/login";
   }
   return (
-    <button onClick={logout} className="text-sm px-3 py-1 border rounded hover:bg-gray-50">
+    <button onClick={logout} className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100 dark:border-stone-600 dark:hover:bg-stone-800">
       Logout
     </button>
   );

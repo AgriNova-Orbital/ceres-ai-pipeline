@@ -29,7 +29,7 @@ def _import_google() -> Any:
     except ImportError as e:  # pragma: no cover
         raise ImportError(
             "Google Drive API client is required. Install extras: "
-            "`uv sync --extra drive` (or `uv pip install google-api-python-client google-auth-oauthlib`)"
+            "`uv sync --extra drive` (or `uv add google-api-python-client google-auth-oauthlib`)"
         ) from e
 
 

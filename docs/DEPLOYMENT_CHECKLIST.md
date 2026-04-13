@@ -66,9 +66,16 @@ Use this checklist before deploying Ceres AI Pipeline to a shared environment.
 - [ ] Decide runtime mode:
   - [ ] native process supervisor
   - [ ] containerized deployment
-- [ ] If containerized, update `Dockerfile` and `docker-compose.yml` to match current architecture.
-- [ ] Ensure WebUI process and worker process are both supervised.
+- [ ] If containerized, use compose profiles and image targets aligned with `dev`, `beta`, `release`.
+- [ ] Ensure WebUI process and worker process are both supervised per profile.
 - [ ] Ensure Redis is part of the deployment or provided externally.
+
+### Profile Runbook
+
+- [ ] Dev stack: `docker compose --profile dev up -d --build`
+- [ ] Beta stack: `docker compose --profile beta up -d --build`
+- [ ] Release stack: `docker compose --profile release up -d --build`
+- [ ] Confirm profile ports and health before promotion.
 
 ## 8. Operations
 

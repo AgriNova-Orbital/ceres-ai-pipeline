@@ -69,7 +69,7 @@ def _import_gdal() -> Any:
         return importlib.import_module("osgeo.gdal")
     except ImportError as e:
         raise ImportError(
-            "GDAL is required for merging. Install with: pip install gdal"
+            "GDAL is required for merging. Install with: uv add gdal"
         ) from e
 
 
@@ -78,7 +78,7 @@ def _import_rasterio() -> Any:
         return importlib.import_module("rasterio")
     except ImportError as e:
         raise ImportError(
-            "rasterio is required for GeoTIFF validation. Install with: uv pip install rasterio"
+            "rasterio is required for GeoTIFF validation. Install with: uv add rasterio"
         ) from e
 
 

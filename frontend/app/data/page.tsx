@@ -67,7 +67,7 @@ export default function DataPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
+          <Link href="/dashboard" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Data Browser</h1>
         </div>
         <div className="flex items-center gap-3">

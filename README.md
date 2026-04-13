@@ -50,22 +50,43 @@ Then open:
 http://127.0.0.1:5055
 ```
 
-#### Container mode (recommended next deployment target)
+#### Container mode (profiles: dev / beta / release)
 
-The current deployment branch introduces a split stack:
-- `web`
-- `worker`
-- `redis`
+This project uses one Compose file with three deployment profiles.
 
-With persistent SQLite state mounted at `/app/state/app.db`.
+Core services in each profile:
+- `web-<profile>`
+- `worker-<profile>`
+- `frontend-<profile>`
+- shared `redis`
 
-Start it with:
+Start each environment with:
 
 ```bash
-docker compose up --build
+# Development
+docker compose --profile dev up --build
+
+# Beta
+docker compose --profile beta up --build
+
+# Release
+docker compose --profile release up --build
 ```
 
-The `worker` service is the only container that should receive GPU access.
+Or use Makefile shortcuts:
+
+```bash
+make dev-up
+make beta-up
+make release-up
+```
+
+Ports:
+- `dev`: web `5055`, frontend `3002`
+- `beta`: web `5155`, frontend `3102`
+- `release`: web `5255`, frontend `3202`
+
+The `worker-*` container is the queue executor and is the only service that should receive GPU access if you enable GPU runtime.
 
 On first launch, the app should enter **Initialization** before login:
 - set OAuth client secret path
@@ -112,7 +133,7 @@ The following items are planned to expand coverage, robustness, and operational 
 - **Multi-user OAuth (Done)**: Completed as of this release.
 - **Monitoring**: Add structured logging and basic dashboards for queue length, job latency, and resource usage.
 - **Object storage cache**: Optional S3/MinIO cache for staged datasets to speed up re-train cycles.
-- **Container images**: Publish versioned images for `web`, `worker`, and `redis`.
+- **Container images**: Publish versioned images for `web-{dev,beta,release}`, `worker-{dev,beta,release}`, and `redis`.
 
 ### 🛠️ Operational CLI Usage
 

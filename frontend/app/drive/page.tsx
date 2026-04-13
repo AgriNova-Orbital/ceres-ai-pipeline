@@ -218,7 +218,7 @@ export default function DrivePage() {
     <div className="min-h-screen bg-gray-50 font-mono">
       <header className="bg-white border-b px-4 sm:px-8 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 font-sans">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-primary hover:underline">&larr; Home</Link>
+          <Link href="/dashboard" className="text-primary hover:underline">&larr; Home</Link>
           <h1 className="text-xl font-bold">Google Drive</h1>
         </div>
         <LogoutButton />
