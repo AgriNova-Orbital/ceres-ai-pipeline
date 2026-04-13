@@ -16,7 +16,7 @@ try:
     import rasterio
 except ImportError as e:
     raise ImportError(
-        "rasterio is required for this module. Install it (e.g. `uv pip install rasterio`)."
+        "rasterio is required for this module. Install it (e.g. `uv add rasterio`)."
     ) from e
 
 WEEK_PATTERN = re.compile(r"fr_wheat_feat_(\d{4})W(\d{2})\.tif(?:f)?$", re.IGNORECASE)
@@ -32,6 +32,7 @@ _WORKER_RISK_BAND: int | None = None
 _WORKER_PATCH_SIZE: int | None = None
 _WORKER_EXAMPLES_DIR: Path | None = None
 _WORKER_ENV: Any | None = None
+
 
 def fill_missing_weeks(
     items: Sequence[tuple[int, object]], *, expected_len: int
@@ -50,6 +51,7 @@ def fill_missing_weeks(
         else:
             values.append(None)
     return values, mask
+
 
 def fill_missing_dates(
     items: Sequence[tuple[date, object]], *, expected_len: int, step_days: int
@@ -75,11 +77,13 @@ def fill_missing_dates(
             values.append(None)
     return values, dates, mask
 
+
 def _to_date(y: int, m: int, d: int) -> date | None:
     try:
         return date(int(y), int(m), int(d))
     except ValueError:
         return None
+
 
 def _extract_date_from_text(text: str) -> date | None:
     m = DATE_SEP_IN_TEXT.search(text)
@@ -93,6 +97,7 @@ def _extract_date_from_text(text: str) -> date | None:
         if d is not None:
             return d
     return None
+
 
 def _parse_temporal_filename(
     filename: str,
@@ -151,6 +156,7 @@ def _parse_temporal_filename(
 
     return None, 0, y
 
+
 def _find_geotiffs(
     input_dir: Path,
 ) -> list[tuple[Path, date | None, int | None, int | None]]:
@@ -172,12 +178,14 @@ def _find_geotiffs(
     )
     return tifs
 
+
 def _resolve_workers(workers: int) -> int:
     if workers < 0:
         raise ValueError("workers must be >= 0")
     if workers == 0:
         return max(1, int(os.cpu_count() or 1))
     return workers
+
 
 def _close_srcs(srcs: Sequence[Any | None]) -> None:
     for s in srcs:
@@ -187,11 +195,13 @@ def _close_srcs(srcs: Sequence[Any | None]) -> None:
         except Exception:
             pass
 
+
 def _safe_nanmean(arr: np.ndarray) -> np.float32:
     finite = np.isfinite(arr)
     if not bool(finite.any()):
         return np.float32(np.nan)
     return np.float32(arr[finite].mean())
+
 
 def _build_patch_and_save(
     *,
@@ -231,6 +241,7 @@ def _build_patch_and_save(
     np.savez_compressed(examples_dir / npz_name, X=X, y=y)
     return npz_rel
 
+
 def _cleanup_worker_srcs() -> None:
     global _WORKER_ENV
     global _WORKER_SRCS
@@ -243,6 +254,7 @@ def _cleanup_worker_srcs() -> None:
         except Exception:
             pass
         _WORKER_ENV = None
+
 
 def _init_patch_worker(
     src_paths: Sequence[str | None],
@@ -269,6 +281,7 @@ def _init_patch_worker(
 
     atexit.register(_cleanup_worker_srcs)
 
+
 def _build_patch_worker(coord: tuple[int, int]) -> str | None:
     if (
         _WORKER_SRCS is None
@@ -289,6 +302,7 @@ def _build_patch_worker(coord: tuple[int, int]) -> str | None:
         risk_band=_WORKER_RISK_BAND,
         examples_dir=_WORKER_EXAMPLES_DIR,
     )
+
 
 def run_build(
     *,
@@ -315,7 +329,7 @@ def run_build(
 
     if patch_size <= 0:
         raise ValueError("--patch-size must be > 0")
-    
+
     workers = _resolve_workers(int(workers))
 
     if int(gdal_cache_mb) <= 0:

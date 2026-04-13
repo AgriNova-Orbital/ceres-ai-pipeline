@@ -29,7 +29,7 @@ def _import_ee() -> Any:
     except ImportError as e:
         raise ImportError(
             "Google Earth Engine (Python package `earthengine-api`) is required for this "
-            "operation. Install it (e.g. `uv pip install earthengine-api`), then authenticate "
+            "operation. Install it (e.g. `uv add earthengine-api`), then authenticate "
             "with `earthengine authenticate` and initialize with `ee.Initialize()` in your "
             "runtime."
         ) from e

@@ -63,6 +63,26 @@ Use this for local testing if you do not want to install Redis.
 
 This mode uses `fakeredis` for local queue/lock testing.
 
+### Option C: Docker Compose profiles (recommended for team environments)
+
+```bash
+# Development
+docker compose --profile dev up --build
+
+# Beta
+docker compose --profile beta up --build
+
+# Release
+docker compose --profile release up --build
+```
+
+Default ports:
+- dev: WebUI `http://127.0.0.1:5055`
+- beta: WebUI `http://127.0.0.1:5155`
+- release: WebUI `http://127.0.0.1:5255`
+
+Compose mode uses the `redis` container (real Redis), not `fakeredis`.
+
 Then open:
 
 ```text
