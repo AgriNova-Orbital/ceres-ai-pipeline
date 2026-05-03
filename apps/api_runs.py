@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from flask import Blueprint, jsonify, request
 
@@ -88,71 +89,84 @@ def register_runs_api(
             job_history.pop()
         return job.id
 
+    def _parse_int_list(csv_like: str, *, field: str) -> list[int]:
+        out: list[int] = []
+        for token in str(csv_like).split(","):
+            t = token.strip()
+            if not t:
+                continue
+            try:
+                v = int(t)
+            except ValueError as e:
+                raise ValueError(f"{field} must be comma-separated integers") from e
+            if v <= 0:
+                raise ValueError(f"{field} values must be > 0")
+            out.append(v)
+        if not out:
+            raise ValueError(f"{field} must not be empty")
+        return out
+
+    def _normalize_path(root: Path, path_like: str | None, default: str) -> str:
+        raw = (path_like or default).strip()
+        p = Path(raw)
+        if p.is_absolute():
+            return str(p)
+        return str(root / raw)
+
     # ── Downloader ───────────────────────────────────────
 
     @api_runs.post("/api/run/downloader")
     def api_run_downloader():
         data = request.get_json(silent=True) or {}
         action = data.get("action", "preview_export")
-        raw_dir = data.get("raw_dir") or "data/raw/france_2025_weekly"
         root = Path(app.config["REPO_ROOT"])
-        out_dir = str(root / raw_dir)
 
-        if action == "preview_export":
-            cmd = [
-                "python",
-                "-u",
-                "scripts/export_weekly_risk_rasters.py",
-                "--stage",
-                data.get("stage", "1"),
-                "--start-date",
-                data.get("start_date", "2025-01-01"),
-                "--end-date",
-                data.get("end_date", "2025-12-31"),
-                "--limit",
-                data.get("limit", "4"),
-                "--dry-run",
-            ]
-            if data.get("ee_project"):
-                cmd += ["--ee-project", data["ee_project"]]
-        elif action == "refresh_inventory":
-            cmd = [
-                "python",
-                "-u",
-                "scripts/export_weekly_risk_rasters.py",
-                "--stage",
-                "1",
-                "--start-date",
-                "2025-01-01",
-                "--end-date",
-                "2025-12-31",
-                "--dry-run",
-            ]
-        elif action == "download_all":
-            cmd = [
-                "python",
-                "-u",
-                "scripts/export_weekly_risk_rasters.py",
-                "--stage",
-                data.get("stage", "1"),
-                "--start-date",
-                data.get("start_date", "2025-01-01"),
-                "--end-date",
-                data.get("end_date", "2025-12-31"),
-                "--output-dir",
-                out_dir,
-            ]
-            if data.get("ee_project"):
-                cmd += ["--ee-project", data["ee_project"]]
-        else:
-            return jsonify(error=f"Unknown action: {action}"), 400
+        if action in {"preview_export", "run_export", "download_all"}:
+            run_flag = action in {"run_export", "download_all"}
+            drive_folder = (data.get("drive_folder") or "").strip() or None
+            if run_flag and not drive_folder:
+                return jsonify(
+                    error="drive_folder is required when action runs export"
+                ), 400
 
-        job_id = _enqueue(
-            "modules.jobs.tasks.task_run_script_for_user",
-            {"user_id": None, "cmd": cmd, "cwd": str(root)},
-            f"downloader: {action}",
-        )
-        return jsonify(job_id=job_id, status="enqueued")
+            payload: dict[str, Any] = {
+                "user_id": None,
+                "stage": str(data.get("stage", "1")),
+                "start_date": str(data.get("start_date", "2025-01-01")),
+                "end_date": str(data.get("end_date", "2025-12-31")),
+                "limit": int(data.get("limit", 4)),
+                "run": run_flag,
+                "drive_folder": drive_folder,
+                "ee_project": (data.get("ee_project") or "").strip() or None,
+            }
+            job_id = _enqueue(
+                "modules.jobs.tasks.task_export_weekly_risk_rasters",
+                payload,
+                f"downloader: {action}",
+            )
+            return jsonify(job_id=job_id, status="enqueued")
+
+        if action == "refresh_inventory":
+            raw_dir = _normalize_path(
+                root,
+                data.get("raw_dir"),
+                "data/raw/france_2025_weekly",
+            )
+            payload = {
+                "user_id": None,
+                "input_dir": raw_dir,
+                "output_dir": str(root / "reports"),
+                "start_date_str": str(data.get("start_date", "2025-01-01")),
+                "cadence_days": int(data.get("cadence_days", 7)),
+            }
+            job_id = _enqueue(
+                "modules.jobs.tasks.task_run_inventory",
+                payload,
+                "downloader: refresh_inventory",
+            )
+            return jsonify(job_id=job_id, status="enqueued")
+
+        return jsonify(error=f"Unknown action: {action}"), 400
 
     # ── Build Dataset ────────────────────────────────────
 
@@ -162,43 +176,30 @@ def register_runs_api(
         action = data.get("action", "build_level")
         root = Path(app.config["REPO_ROOT"])
         level = data.get("level", "1")
-        raw_dir = data.get("raw_dir") or "data/raw/france_2025_weekly"
-        max_patches = data.get("max_patches", "12000")
+        raw_dir = _normalize_path(
+            root, data.get("raw_dir"), "data/raw/france_2025_weekly"
+        )
+        max_patches = int(data.get("max_patches", 12000))
 
-        if action == "dry_run":
-            cmd = [
-                "python",
-                "-u",
-                "scripts/build_npz_dataset_from_geotiffs.py",
-                "--input-dir",
-                str(root / raw_dir),
-                "--output-dir",
-                str(root / "data" / "wheat_risk" / "staged" / f"L{level}"),
-                "--max-patches",
-                "1",
-            ]
-        else:
-            cmd = [
-                "python",
-                "-u",
-                "scripts/build_npz_dataset_from_geotiffs.py",
-                "--input-dir",
-                str(root / raw_dir),
-                "--output-dir",
-                str(root / "data" / "wheat_risk" / "staged" / f"L{level}"),
-                "--patch-size",
-                "64",
-                "--step-size",
-                "64",
-                "--expected-weeks",
-                "46",
-                "--max-patches",
-                str(max_patches),
-            ]
+        if action not in {"build_level", "dry_run"}:
+            return jsonify(error=f"Unknown action: {action}"), 400
+
+        patch = {"1": 64, "2": 32, "4": 16}.get(str(level), 64)
+        payload = {
+            "user_id": None,
+            "input_dir": raw_dir,
+            "output_dir": str(root / "data" / "wheat_risk" / "staged" / f"L{level}"),
+            "patch_size": patch,
+            "step_size": patch,
+            "expected_weeks": int(data.get("expected_weeks", 46)),
+            "max_patches": 1 if action == "dry_run" else max_patches,
+            "workers": int(data.get("workers", 0)),
+            "skip_existing": bool(data.get("skip_existing", False)),
+        }
 
         job_id = _enqueue(
-            "modules.jobs.tasks.task_run_script_for_user",
-            {"user_id": None, "cmd": cmd, "cwd": str(root)},
+            "modules.jobs.tasks.task_build_dataset",
+            payload,
             f"build: {action}",
         )
         return jsonify(job_id=job_id, status="enqueued")
@@ -208,81 +209,135 @@ def register_runs_api(
     @api_runs.post("/api/run/train")
     def api_run_train():
         data = request.get_json(silent=True) or {}
-        action = data.get("action", "dry_run")
+        action = str(data.get("action", "dry_run")).strip()
+        if action == "execute_train":
+            action = "run_matrix"
         root = Path(app.config["REPO_ROOT"])
 
         if action == "dry_run":
-            cmd = ["python", "-u", "scripts/train_wheat_risk_lstm.py", "--dry-run"]
-        elif action == "train":
-            cmd = [
-                "python",
-                "-u",
-                "scripts/train_wheat_risk_lstm.py",
-                "--index-csv",
-                data.get("index_csv", "./data/wheat_risk/staged/L1/index.csv"),
-                "--root-dir",
-                data.get("root_dir", "./data/wheat_risk/staged/L1"),
-                "--device",
-                data.get("device", "cpu"),
-                "--epochs",
-                str(data.get("epochs", 10)),
-                "--batch-size",
-                str(data.get("batch_size", 8)),
-                "--lr",
-                str(data.get("lr", "1e-3")),
-                "--runs-dir",
-                "runs",
-            ]
-        elif action == "run_matrix":
-            levels = data.get("levels", "1,2,4")
-            steps = data.get("steps", "100,500,2000")
-            cmd = [
-                "python",
-                "-u",
-                "scripts/train_wheat_risk_lstm.py",
-                "--matrix",
-                "--levels",
-                levels,
-                "--steps",
-                steps,
-                "--dry-run" if data.get("dry_run", True) else "",
-            ]
-            cmd = [c for c in cmd if c]
-        else:
-            return jsonify(error=f"Unknown action: {action}"), 400
+            payload = {
+                "user_id": None,
+                "levels": _parse_int_list(
+                    str(data.get("levels", "1,2,4")), field="levels"
+                ),
+                "steps": _parse_int_list(
+                    str(data.get("steps", "100,500,2000")), field="steps"
+                ),
+                "base_patch": int(data.get("base_patch", 64)),
+                "dry_run": True,
+                "execute_train": False,
+                "runs_dir": Path(str(data.get("runs_dir", "runs"))),
+                "index_csv": None,
+                "index_csv_template": None,
+                "root_dir": None,
+                "root_dir_template": None,
+                "train_script": Path(
+                    str(data.get("train_script", "scripts/train_wheat_risk_lstm.py"))
+                ),
+                "epochs": int(data.get("epochs", 10)),
+                "batch_size": int(data.get("batch_size", 8)),
+                "lr": float(data.get("lr", 1e-3)),
+                "embed_dim": int(data.get("embed_dim", 64)),
+                "hidden_dim": int(data.get("hidden_dim", 128)),
+                "num_workers": int(data.get("num_workers", 0)),
+                "device": str(data.get("device", "cpu")),
+                "seed_base": int(data.get("seed_base", 42)),
+            }
+            job_id = _enqueue(
+                "modules.jobs.tasks.task_run_matrix", payload, "train: dry_run"
+            )
+            return jsonify(job_id=job_id, status="enqueued")
 
-        job_id = _enqueue(
-            "modules.jobs.tasks.task_run_script_for_user",
-            {"user_id": None, "cmd": cmd, "cwd": str(root)},
-            f"train: {action}",
-        )
-        return jsonify(job_id=job_id, status="enqueued")
+        if action == "run_matrix":
+            payload = {
+                "user_id": None,
+                "levels": _parse_int_list(
+                    str(data.get("levels", "1,2,4")), field="levels"
+                ),
+                "steps": _parse_int_list(
+                    str(data.get("steps", "100,500,2000")), field="steps"
+                ),
+                "base_patch": int(data.get("base_patch", 64)),
+                "dry_run": bool(data.get("dry_run", False)),
+                "execute_train": True,
+                "runs_dir": Path(str(data.get("runs_dir", "runs"))),
+                "index_csv": None,
+                "index_csv_template": str(
+                    data.get(
+                        "index_csv_template",
+                        "./data/wheat_risk/staged/L{level}/index.csv",
+                    )
+                ),
+                "root_dir": None,
+                "root_dir_template": str(
+                    data.get("root_dir_template", "./data/wheat_risk/staged/L{level}")
+                ),
+                "train_script": Path(
+                    str(data.get("train_script", "scripts/train_wheat_risk_lstm.py"))
+                ),
+                "epochs": int(data.get("epochs", 10)),
+                "batch_size": int(data.get("batch_size", 8)),
+                "lr": float(data.get("lr", 1e-3)),
+                "embed_dim": int(data.get("embed_dim", 64)),
+                "hidden_dim": int(data.get("hidden_dim", 128)),
+                "num_workers": int(data.get("num_workers", 0)),
+                "device": str(data.get("device", "cpu")),
+                "seed_base": int(data.get("seed_base", 42)),
+            }
+            job_id = _enqueue(
+                "modules.jobs.tasks.task_run_matrix",
+                payload,
+                "train: run_matrix",
+            )
+            return jsonify(job_id=job_id, status="enqueued")
+
+        return jsonify(error=f"Unknown action: {action}"), 400
 
     # ── Evaluation ───────────────────────────────────────
 
     @api_runs.post("/api/run/eval")
     def api_run_eval():
         data = request.get_json(silent=True) or {}
-        root = Path(app.config["REPO_ROOT"])
-        cmd = [
-            "python",
-            "-u",
-            "scripts/eval_staged_training_matrix.py",
-            "--index-csv-template",
-            data.get(
-                "index_csv_template", "./data/wheat_risk/staged/L{level}/index.csv"
+        payload = {
+            "user_id": None,
+            "summary_csv": Path(
+                str(data.get("summary_csv", "runs/staged_final/summary.csv"))
             ),
-            "--root-dir-template",
-            data.get("root_dir_template", "./data/wheat_risk/staged/L{level}"),
-            "--output-csv",
-            "runs/eval_metrics.csv",
-            "--best-json",
-            "runs/best_model.json",
-        ]
+            "index_csv_template": str(
+                data.get(
+                    "index_csv_template", "./data/wheat_risk/staged/L{level}/index.csv"
+                )
+            ),
+            "root_dir_template": str(
+                data.get("root_dir_template", "./data/wheat_risk/staged/L{level}")
+            ),
+            "output_csv": Path(
+                str(data.get("output_csv", "runs/staged_final/eval_metrics.csv"))
+            ),
+            "best_json": Path(
+                str(data.get("best_json", "runs/staged_final/best_model.json"))
+            ),
+            "label_threshold": float(data.get("label_threshold", 0.5)),
+            "precision_floor": float(data.get("precision_floor", 0.35)),
+            "pred_threshold_min": float(data.get("pred_threshold_min", 0.05)),
+            "pred_threshold_max": float(data.get("pred_threshold_max", 0.95)),
+            "pred_threshold_step": float(data.get("pred_threshold_step", 0.01)),
+            "eval_ratio": float(data.get("eval_ratio", 0.2)),
+            "eval_min": int(data.get("eval_min", 128)),
+            "seed": int(data.get("seed", 42)),
+            "batch_size": int(data.get("batch_size", 8)),
+            "num_workers": int(data.get("num_workers", 0)),
+            "device": str(data.get("device", "cuda")),
+            "embed_dim": int(data.get("embed_dim", 64)),
+            "hidden_dim": int(data.get("hidden_dim", 128)),
+            "levels": None,
+        }
+        if data.get("levels"):
+            payload["levels"] = _parse_int_list(str(data.get("levels")), field="levels")
 
         job_id = _enqueue(
-            "modules.jobs.tasks.task_run_script_for_user",
-            {"user_id": None, "cmd": cmd, "cwd": str(root)},
+            "modules.jobs.tasks.task_run_eval",
+            payload,
             "eval: run_eval",
         )
         return jsonify(job_id=job_id, status="enqueued")

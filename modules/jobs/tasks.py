@@ -1,4 +1,5 @@
 # modules/jobs/tasks.py
+import inspect
 import json
 import os
 import subprocess
@@ -80,6 +81,87 @@ def task_run_script_for_user(kwargs: dict[str, Any]) -> dict:
         if token:
             env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
     return run_script(cmd=cmd, cwd=cwd, env_overrides=env_overrides or None)
+
+
+def task_export_weekly_risk_rasters(kwargs: dict[str, Any]) -> dict[str, Any]:
+    from scripts import export_weekly_risk_rasters as export_script
+
+    user_id = kwargs.pop("user_id", None)
+    stage = str(kwargs.get("stage", "1")).strip() or "1"
+    start_date = str(kwargs.get("start_date", "2025-01-01")).strip()
+    end_date = str(kwargs.get("end_date", "2025-12-31")).strip()
+    limit = int(kwargs.get("limit", 4))
+    run = bool(kwargs.get("run", False))
+    drive_folder = kwargs.get("drive_folder")
+    ee_project = kwargs.get("ee_project")
+
+    if run and not drive_folder:
+        _set_progress("failed", 100)
+        return {
+            "returncode": 2,
+            "stdout": "",
+            "stderr": "drive_folder is required when run=true",
+        }
+
+    env_overrides: dict[str, str] = {}
+    if user_id:
+        from modules.persistence.sqlite_store import SQLiteStore
+
+        store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
+        token = store.get_user_oauth_token(user_id)
+        if token:
+            env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
+
+    argv: list[str] = [
+        "--stage",
+        stage,
+        "--start-date",
+        start_date,
+        "--end-date",
+        end_date,
+        "--limit",
+        str(limit),
+    ]
+    if ee_project:
+        argv.extend(["--ee-project", str(ee_project)])
+    if drive_folder:
+        argv.extend(["--drive-folder", str(drive_folder)])
+    if run:
+        argv.append("--run")
+    else:
+        argv.append("--dry-run")
+
+    _set_progress("running export_weekly_risk_rasters", 10)
+    old_env: dict[str, str | None] = {}
+    for key, val in env_overrides.items():
+        old_env[key] = os.environ.get(key)
+        os.environ[key] = val
+    try:
+        rc = int(export_script.main(argv))
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else 1
+        rc = int(code)
+    except Exception as e:
+        _set_progress("failed", 100)
+        return {
+            "returncode": 1,
+            "stdout": "",
+            "stderr": str(e)[-2000:],
+        }
+    finally:
+        for key, prev in old_env.items():
+            if prev is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = prev
+
+    _set_progress("done" if rc == 0 else "failed", 100)
+    return {
+        "returncode": rc,
+        "stdout": "",
+        "stderr": "",
+        "argv": argv,
+    }
 
 
 def task_build_dataset(kwargs: dict[str, Any]) -> None:
@@ -326,9 +408,13 @@ def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
     }
 
     try:
-        ingest_summary = ingest_downloaded_geotiffs(
-            save_dir, progress_callback=_on_merge_event
-        )
+        params = inspect.signature(ingest_downloaded_geotiffs).parameters
+        if "progress_callback" in params:
+            ingest_summary = ingest_downloaded_geotiffs(
+                save_dir, progress_callback=_on_merge_event
+            )
+        else:
+            ingest_summary = ingest_downloaded_geotiffs(save_dir)
     except ImportError as e:
         ingest_summary = {
             "merged_weeks": [],

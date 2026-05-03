@@ -18,6 +18,7 @@ def _initialize_app(app, tmp_path: Path) -> None:
         oauth_client_secret_path=str(secret),
         redirect_base_url="http://127.0.0.1:5055",
     )
+    app.config["SQLITE_STORE"].set_admin("admin", "strong-test-password")
     app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
 
 
@@ -25,6 +26,7 @@ def _login(client, app=None) -> None:
     with client.session_transaction() as sess:
         sess["user"] = {"email": "user@example.com"}
         sess["user_id"] = "uuid-user-123"
+        sess["must_change_password"] = False
     if app is not None:
         store = app.config["SQLITE_STORE"]
         store.save_user_oauth_token(
@@ -202,7 +204,7 @@ def test_raw_preview_rejects_paths_outside_repo_allowlist(tmp_path: Path) -> Non
     assert resp.status_code == 403
 
 
-def test_downloader_preview_runs_dry_run_command(
+def test_downloader_preview_runs_dry_run_task(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from apps.wheat_risk_webui import create_app
@@ -237,16 +239,16 @@ def test_downloader_preview_runs_dry_run_command(
     assert resp.status_code == 200
     mock_queue.enqueue.assert_called_once()
     args, kwargs = mock_queue.enqueue.call_args
-    assert args[0] == "modules.jobs.tasks.task_run_script_for_user"
+    assert args[0] == "modules.jobs.tasks.task_export_weekly_risk_rasters"
     job_kwargs = kwargs["args"][0]
-    cmd = job_kwargs["cmd"]
-    assert isinstance(cmd, list)
-    assert "scripts/export_weekly_risk_rasters.py" in cmd
-    assert "--dry-run" in cmd
+    assert job_kwargs["run"] is False
+    assert job_kwargs["drive_folder"] == "EarthEngine"
+    assert job_kwargs["ee_project"] == "demo-proj"
 
 
-
-def test_drive_download_accepts_json_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_drive_download_accepts_json_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from apps.wheat_risk_webui import create_app
 
     mock_queue = MagicMock()
@@ -274,13 +276,15 @@ def test_drive_download_accepts_json_payload(tmp_path: Path, monkeypatch: pytest
     assert job_kwargs["save_dir"] == "data/raw/drive_download"
 
 
-
-def test_api_jobs_respects_limit_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_jobs_respects_limit_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from apps.wheat_risk_webui import create_app
 
     class FakeRegistry:
         def __init__(self, ids):
             self._ids = ids
+
         def get_job_ids(self):
             return self._ids
 
@@ -294,6 +298,7 @@ def test_api_jobs_respects_limit_query(tmp_path: Path, monkeypatch: pytest.Monke
             self.enqueued_at = None
             self.started_at = None
             self.ended_at = None
+
         def get_status(self):
             return "finished"
 
@@ -304,15 +309,19 @@ def test_api_jobs_respects_limit_query(tmp_path: Path, monkeypatch: pytest.Monke
             self.started_job_registry = FakeRegistry([])
             self.finished_job_registry = FakeRegistry(ids)
             self.failed_job_registry = FakeRegistry([])
+
         def get_job_ids(self):
             return []
+
         def fetch_job(self, jid):
             return FakeJob(jid)
 
     class FakeWorker:
         name = "worker-1"
+
         def get_state(self):
             return "idle"
+
         def get_current_job_id(self):
             return None
 

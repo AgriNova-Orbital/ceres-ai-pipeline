@@ -8,6 +8,57 @@ def test_run_script_task_executes_subprocess() -> None:
     assert result["cwd"] == "."
 
 
+def test_task_export_weekly_risk_rasters_runs_script_main_with_args(
+    monkeypatch,
+) -> None:
+    from modules.jobs.tasks import task_export_weekly_risk_rasters
+
+    captured: dict[str, object] = {}
+
+    def fake_main(argv):
+        captured["argv"] = list(argv)
+        return 0
+
+    monkeypatch.setattr("scripts.export_weekly_risk_rasters.main", fake_main)
+
+    result = task_export_weekly_risk_rasters(
+        {
+            "stage": "1",
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-31",
+            "limit": 4,
+            "run": False,
+            "drive_folder": None,
+            "ee_project": "demo-proj",
+            "user_id": None,
+        }
+    )
+
+    assert result["returncode"] == 0
+    argv = captured["argv"]
+    assert "--stage" in argv
+    assert "--dry-run" in argv
+
+
+def test_task_export_weekly_risk_rasters_requires_drive_folder_when_run() -> None:
+    from modules.jobs.tasks import task_export_weekly_risk_rasters
+
+    result = task_export_weekly_risk_rasters(
+        {
+            "stage": "1",
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-31",
+            "limit": 4,
+            "run": True,
+            "drive_folder": None,
+            "user_id": None,
+        }
+    )
+
+    assert result["returncode"] == 2
+    assert "drive_folder" in str(result["stderr"])
+
+
 def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> None:
     from modules.jobs.tasks import task_drive_download
 
@@ -198,8 +249,9 @@ def test_task_drive_download_sets_download_manifest_in_job_meta(
     assert summary_call["merge_summary"]["total_weeks"] == 2
 
 
-
-def test_task_drive_download_overwrites_existing_file_and_reports_counts(monkeypatch, tmp_path) -> None:
+def test_task_drive_download_overwrites_existing_file_and_reports_counts(
+    monkeypatch, tmp_path
+) -> None:
     from modules.jobs.tasks import task_drive_download
 
     class FakeFilesApi:
@@ -212,6 +264,7 @@ def test_task_drive_download_overwrites_existing_file_and_reports_counts(monkeyp
                         "mimeType": "image/tiff",
                         "size": "10",
                     }
+
             return _Req()
 
     class FakeService:
@@ -250,7 +303,11 @@ def test_task_drive_download_overwrites_existing_file_and_reports_counts(monkeyp
         {
             "file_ids": ["file-1"],
             "save_dir": str(tmp_path),
-            "oauth_token": {"access_token": "abc", "refresh_token": "ref", "scope": "https://www.googleapis.com/auth/drive.readonly"},
+            "oauth_token": {
+                "access_token": "abc",
+                "refresh_token": "ref",
+                "scope": "https://www.googleapis.com/auth/drive.readonly",
+            },
         }
     )
 
