@@ -421,37 +421,23 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         queue = get_queue_conn()
 
         if action in {"preview_export", "run_export"}:
-            cmd = [
-                "uv",
-                "run",
-                "scripts/export_weekly_risk_rasters.py",
-                "--stage",
-                stage,
-                "--start-date",
-                start_date,
-                "--end-date",
-                end_date,
-                "--limit",
-                limit,
-            ]
-            if ee_project:
-                cmd.extend(["--ee-project", ee_project])
-            if drive_folder:
-                cmd.extend(["--drive-folder", drive_folder])
-            if action == "preview_export":
-                cmd.append("--dry-run")
-            else:
-                cmd.append("--run")
+            if action == "run_export" and not drive_folder:
+                flash("Drive folder is required for run_export.", "error")
+                return redirect(url_for("home"))
 
+            job_kwargs = {
+                "user_id": session.get("user_id"),
+                "stage": stage,
+                "start_date": start_date,
+                "end_date": end_date,
+                "limit": int(limit),
+                "run": action == "run_export",
+                "drive_folder": drive_folder or None,
+                "ee_project": ee_project or None,
+            }
             job = queue.enqueue(
-                "modules.jobs.tasks.task_run_script_for_user",
-                args=(
-                    {
-                        "user_id": session.get("user_id"),
-                        "cmd": cmd,
-                        "cwd": str(app.config["REPO_ROOT"]),
-                    },
-                ),
+                "modules.jobs.tasks.task_export_weekly_risk_rasters",
+                args=(job_kwargs,),
                 job_timeout="1h",
                 result_ttl="7d",
                 description=f"downloader: {action}",
@@ -464,7 +450,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
                 id=job.id,
                 section="downloader",
                 action=action,
-                command=cmd,
+                command=["task_export_weekly_risk_rasters"],
                 status="enqueued",
                 enqueued_at=_now_iso(),
             )
@@ -585,6 +571,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     @app.post("/run/train")
     def run_train_matrix() -> Response:
         action = request.form.get("action", "dry_run").strip()
+        if action == "execute_train":
+            action = "run_matrix"
         lock_key = f"lock:train:{action}"
 
         try:
@@ -603,30 +591,37 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         level_list = [x.strip() for x in levels.split(",") if x.strip()]
         steps_list = [int(x.strip()) for x in steps.split(",") if x.strip()]
 
+        is_dry_run = action == "dry_run"
+
         job_kwargs = {
             "levels": level_list,
             "steps": steps_list,
             "base_patch": 64,
-            "dry_run": action == "dry_run",
+            "dry_run": is_dry_run,
             "runs_dir": "runs",
             "train_script": "scripts/train_wheat_risk_lstm.py",
             "user_id": session.get("user_id"),
+            "execute_train": not is_dry_run,
+            "index_csv": None,
+            "index_csv_template": None,
+            "root_dir": None,
+            "root_dir_template": None,
+            "epochs": 10,
+            "batch_size": 8,
+            "lr": 1e-3,
+            "embed_dim": 64,
+            "hidden_dim": 128,
+            "num_workers": 0,
+            "device": "cpu",
+            "seed_base": 42,
         }
 
-        if action != "dry_run":
-            job_kwargs["execute_train"] = True
+        if not is_dry_run:
             job_kwargs["index_csv_template"] = (
                 "./data/wheat_risk/staged/L{level}/index.csv"
             )
             job_kwargs["root_dir_template"] = "./data/wheat_risk/staged/L{level}"
             job_kwargs["device"] = "cuda"
-            job_kwargs["epochs"] = 10
-            job_kwargs["batch_size"] = 8
-            job_kwargs["lr"] = 1e-3
-            job_kwargs["embed_dim"] = 64
-            job_kwargs["hidden_dim"] = 128
-            job_kwargs["num_workers"] = 0
-            job_kwargs["seed_base"] = 42
 
         job = queue.enqueue(
             "modules.jobs.tasks.task_run_matrix",
@@ -778,14 +773,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             # Sort: folders first, then files by name
             folders.sort(key=lambda x: x["name"].lower())
             files.sort(key=lambda x: x["name"].lower())
-            return jsonify({
-                "folder_id": folder_id,
-                "folders": folders,
-                "files": files,
-                "total": len(folders) + len(files),
-                "folder_count": len(folders),
-                "file_count": len(files),
-            })
+            return jsonify(
+                {
+                    "folder_id": folder_id,
+                    "folders": folders,
+                    "files": files,
+                    "total": len(folders) + len(files),
+                    "folder_count": len(folders),
+                    "file_count": len(files),
+                }
+            )
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -822,7 +819,11 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         data = request.get_json(silent=True) or request.form
         folder_id = str(data.get("folder_id", "")).strip()
         raw_file_ids = data.get("file_ids") or []
-        file_ids = [str(x).strip() for x in raw_file_ids if str(x).strip()] if isinstance(raw_file_ids, list) else []
+        file_ids = (
+            [str(x).strip() for x in raw_file_ids if str(x).strip()]
+            if isinstance(raw_file_ids, list)
+            else []
+        )
         save_dir = str(data.get("save_dir", "data/raw/drive_download")).strip()
 
         if not folder_id and not file_ids:
