@@ -23,6 +23,8 @@ dependencies = [
     "redis>=5.0.0",
     "requests>=2.31.0",
     "rq>=1.16.0",
+    "sentry-sdk[flask,rq]>=2.0.0",
+    "newrelic>=10.0.0",
 ]
 
 [project.optional-dependencies]
