@@ -347,3 +347,143 @@ def test_api_jobs_respects_limit_query(
     assert resp_all.status_code == 200
     data_all = resp_all.get_json()
     assert len(data_all["jobs"]) == 150
+
+
+def test_api_job_detail_returns_single_rq_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeJob:
+        id = "job-123"
+        description = "downloader: refresh_inventory"
+        meta = {"progress": 100, "step": "done"}
+        result = {"ok": True, "report": "reports/inventory.json"}
+        exc_info = None
+        enqueued_at = None
+        started_at = None
+        ended_at = None
+
+        def get_status(self):
+            return "finished"
+
+    class FakeQueue:
+        def fetch_job(self, jid):
+            return FakeJob() if jid == "job-123" else None
+
+    monkeypatch.setattr("rq.Queue", lambda connection=None: FakeQueue())
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+
+    resp = client.get("/api/jobs/job-123")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["job"]["id"] == "job-123"
+    assert payload["job"]["status"] == "finished"
+    assert payload["job"]["meta"] == {"progress": 100, "step": "done"}
+    assert payload["job"]["result"]["report"] == "reports/inventory.json"
+
+
+def test_api_job_detail_returns_404_for_unknown_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeQueue:
+        def fetch_job(self, jid):
+            return None
+
+    monkeypatch.setattr("rq.Queue", lambda connection=None: FakeQueue())
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+
+    resp = client.get("/api/jobs/missing-job")
+
+    assert resp.status_code == 404
+    assert resp.get_json()["error"] == "Job not found"
+
+
+def test_healthz_reports_app_redis_and_sqlite_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: FakeRedis())
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+
+    resp = client.get("/healthz")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["status"] == "ok"
+    assert payload["redis"] is True
+    assert payload["db"] is True
+    assert payload["checks"]["app"]["status"] == "ok"
+    assert payload["checks"]["redis"]["status"] == "ok"
+    assert payload["checks"]["sqlite"]["status"] == "ok"
+    assert "path" not in payload["checks"]["sqlite"]
+
+
+def test_healthz_returns_503_when_redis_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeRedis:
+        def ping(self):
+            raise RuntimeError("redis down")
+
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: FakeRedis())
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+
+    resp = client.get("/healthz")
+
+    assert resp.status_code == 503
+    payload = resp.get_json()
+    assert payload["status"] == "degraded"
+    assert payload["redis"] is False
+    assert payload["db"] is True
+    assert payload["checks"]["redis"]["status"] == "error"
+    assert "redis down" not in str(payload)
+
+
+def test_healthz_returns_503_when_sqlite_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeRedis:
+        def ping(self):
+            return True
+
+    def fail_connect():
+        raise RuntimeError("sqlite down")
+
+    monkeypatch.setattr("apps.wheat_risk_webui.get_redis_conn", lambda: FakeRedis())
+
+    app = create_app(repo_root=tmp_path)
+    monkeypatch.setattr(app.config["SQLITE_STORE"], "_connect", fail_connect)
+    client = app.test_client()
+
+    resp = client.get("/healthz")
+
+    assert resp.status_code == 503
+    payload = resp.get_json()
+    assert payload["status"] == "degraded"
+    assert payload["redis"] is True
+    assert payload["db"] is False
+    assert payload["checks"]["sqlite"]["status"] == "error"
+    assert "sqlite down" not in str(payload)

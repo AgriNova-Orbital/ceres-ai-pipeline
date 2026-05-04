@@ -246,6 +246,12 @@ Google → callback /api/oauth/callback
 | GET | `/api/jobs` | Job 歷史列表 | — |
 | GET | `/api/jobs/<id>` | 單一 Job 狀態 | — |
 
+#### Health
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| GET | `/healthz` | App、Redis、SQLite 健康檢查；正常回 200，依賴異常回 503 |
+
 #### OAuth
 
 | 方法 | 路徑 | 說明 |
@@ -310,6 +316,7 @@ Job meta 欄位：
 | 機制 | 說明 |
 |------|------|
 | RQ Job meta | 前端輪詢 `/api/jobs/<id>` 取得即時進度 |
+| 健康檢查 | `/healthz` 檢查 App、Redis、SQLite，Compose web healthcheck 使用此端點 |
 | Docker logs | `docker compose --profile <dev|beta|release> logs -f` 查看各服務日誌 |
 | 檔案日誌 | `webui.log`, `worker.log`, `rq_worker.log` |
 
@@ -319,7 +326,6 @@ Job meta 欄位：
 |------|--------|
 | 結構化 JSON logging（取代 print/散亂 log） | P1 |
 | Prometheus metrics（queue length、job latency、GPU utilization） | P2 |
-| 健康檢查端點 `/healthz` | P1 |
 | 告警（Worker 離線、Queue 堆積超過閾值） | P2 |
 
 ---
@@ -337,7 +343,7 @@ docker compose --profile release build
 docker compose --profile release up -d --force-recreate
 
 # 4. 驗證
-curl http://localhost:5055/healthz   # 待實作
+curl http://localhost:5055/healthz
 docker compose --profile release ps
 docker compose --profile release logs --tail=50 web-release worker-release
 ```

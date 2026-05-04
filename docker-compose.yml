@@ -1,3 +1,16 @@
+x-web-healthcheck: &web-healthcheck
+  test:
+    [
+      "CMD",
+      "python",
+      "-c",
+      "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5055/healthz', timeout=3).read()",
+    ]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 20s
+
 services:
   redis:
     image: redis:7-alpine
@@ -35,6 +48,7 @@ services:
       - ./runs:/app/runs
       - ./reports:/app/reports
       - ./logs:/app/logs
+    healthcheck: *web-healthcheck
     restart: unless-stopped
 
   worker-dev:
@@ -67,7 +81,8 @@ services:
       context: ./frontend
     container_name: ceres-frontend-dev
     depends_on:
-      - web-dev
+      web-dev:
+        condition: service_healthy
     environment:
       - API_URL=http://web-dev:5055
     ports:
@@ -98,6 +113,7 @@ services:
       - ./runs:/app/runs
       - ./reports:/app/reports
       - ./logs:/app/logs
+    healthcheck: *web-healthcheck
     restart: unless-stopped
 
   worker-beta:
@@ -130,7 +146,8 @@ services:
       context: ./frontend
     container_name: ceres-frontend-beta
     depends_on:
-      - web-beta
+      web-beta:
+        condition: service_healthy
     environment:
       - API_URL=http://web-beta:5055
     ports:
@@ -161,6 +178,7 @@ services:
       - ./runs:/app/runs
       - ./reports:/app/reports
       - ./logs:/app/logs
+    healthcheck: *web-healthcheck
     restart: unless-stopped
 
   worker-release:
@@ -193,7 +211,8 @@ services:
       context: ./frontend
     container_name: ceres-frontend-release
     depends_on:
-      - web-release
+      web-release:
+        condition: service_healthy
     environment:
       - API_URL=http://web-release:5055
     ports:
