@@ -117,7 +117,7 @@
 
 | 任務 | Owner | 狀態 | 備註 |
 |------|-------|------|------|
-| W1-1 | 我 | ⬜ TODO | |
+| W1-1 | 我 | ✅ DONE | `/healthz` checks App/Redis/SQLite and has unit coverage |
 | W1-2 | 隊友A | ⬜ TODO | |
 | W1-3 | 隊友B | ⬜ TODO | |
 | W1-4 | 我 | ⬜ TODO | |

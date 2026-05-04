@@ -215,6 +215,40 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     app.config["APP_DB_PATH"] = app_db_path
     app.config["SQLITE_STORE"] = sqlite_store
 
+    @app.get("/healthz")
+    def healthz() -> Response:
+        checks: dict[str, dict[str, Any]] = {
+            "app": {"status": "ok"},
+        }
+        ok = True
+
+        try:
+            get_redis_conn().ping()
+            checks["redis"] = {"status": "ok"}
+        except Exception:
+            ok = False
+            app.logger.warning("Redis health check failed", exc_info=True)
+            checks["redis"] = {"status": "error"}
+
+        try:
+            with sqlite_store._connect() as conn:
+                conn.execute("SELECT 1").fetchone()
+            checks["sqlite"] = {"status": "ok"}
+        except Exception:
+            ok = False
+            app.logger.warning("SQLite health check failed", exc_info=True)
+            checks["sqlite"] = {"status": "error"}
+
+        redis_ok = checks.get("redis", {}).get("status") == "ok"
+        db_ok = checks.get("sqlite", {}).get("status") == "ok"
+        status_code = 200 if ok else 503
+        return jsonify(
+            status="ok" if ok else "degraded",
+            redis=redis_ok,
+            db=db_ok,
+            checks=checks,
+        ), status_code
+
     # ── Auth Routes ──────────────────────────────────────
 
     @app.route("/login", methods=["GET", "POST"])
@@ -264,6 +298,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "drive_list",
             "drive_estimate",
             "drive_download",
+            "healthz",
         }
         if request.endpoint in allowed:
             return None

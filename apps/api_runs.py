@@ -342,7 +342,20 @@ def register_runs_api(
         )
         return jsonify(job_id=job_id, status="enqueued")
 
-    # ── Jobs List ────────────────────────────────────────
+    # ── Jobs ──────────────────────────────────────────────
+
+    @api_runs.get("/api/jobs/<job_id>")
+    def api_job_detail(job_id: str):
+        try:
+            queue = Queue(connection=redis_conn)
+            job = queue.fetch_job(job_id)
+        except Exception as e:
+            return jsonify(error=str(e)), 500
+
+        if job is None:
+            return jsonify(error="Job not found"), 404
+
+        return jsonify(job=_job_info(job))
 
     @api_runs.get("/api/jobs")
     def api_jobs():
