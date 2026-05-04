@@ -331,7 +331,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if not clerk_auth.is_clerk_auth_enabled():
             return None
         if request.endpoint == "api_oauth.oauth_callback":
-            pending_user = session.get("pending_clerk_user")
+            pending_user = session.pop("pending_clerk_user", None)
             if isinstance(pending_user, dict) and pending_user.get("sub"):
                 g.clerk_user = pending_user
                 return None
@@ -339,10 +339,16 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         try:
             token = clerk_auth.extract_bearer_token(request.headers.get("Authorization"))
             user = clerk_auth.verify_clerk_token(token)
-        except Exception:
+        except clerk_auth.ClerkAuthError:
             return jsonify(error="Not authenticated"), 401
+        except clerk_auth.ClerkVerificationUnavailable:
+            app.logger.warning("Clerk verification unavailable", exc_info=True)
+            return jsonify(error="Authentication service unavailable"), 503
         if request.endpoint == "api_oauth.oauth_login":
-            session["pending_clerk_user"] = user
+            pending_user = {"sub": str(user["sub"])}
+            if user.get("exp") is not None:
+                pending_user["exp"] = user["exp"]
+            session["pending_clerk_user"] = pending_user
         g.clerk_user = user
         return None
 

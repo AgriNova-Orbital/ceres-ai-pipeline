@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -8,14 +9,29 @@ const isPublicRoute = createRouteMatcher([
   "/terms",
   "/favicon.ico",
   "/logo(.*)",
-  "/api(.*)",
+  "/api/auth(.*)",
+  "/api/oauth/callback(.*)",
   "/auth(.*)",
 ]);
 
+const isApiRoute = createRouteMatcher(["/api(.*)"]);
+
 export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
+  if (isPublicRoute(request)) {
+    return NextResponse.next();
   }
+
+  const authState = await auth.protect();
+  if (isApiRoute(request)) {
+    const token = await authState.getToken();
+    if (token) {
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set("Authorization", `Bearer ${token}`);
+      return NextResponse.next({ request: { headers: requestHeaders } });
+    }
+  }
+
+  return NextResponse.next();
 });
 
 export const config = {

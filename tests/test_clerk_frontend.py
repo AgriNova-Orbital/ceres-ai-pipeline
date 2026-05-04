@@ -24,6 +24,15 @@ def test_clerk_proxy_uses_clerk_middleware() -> None:
     assert "matcher" in proxy
 
 
+def test_clerk_proxy_injects_bearer_for_api_rewrites() -> None:
+    proxy = (FRONTEND / "proxy.ts").read_text()
+
+    assert '  "/api(.*)",' not in proxy
+    assert "getToken" in proxy
+    assert "Authorization" in proxy
+    assert "NextResponse.next" in proxy
+
+
 def test_next14_middleware_reexports_clerk_proxy() -> None:
     middleware = (FRONTEND / "middleware.ts").read_text()
 
