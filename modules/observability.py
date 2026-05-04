@@ -10,9 +10,12 @@ def _float_env(name: str, default: float) -> float:
     if raw is None or raw.strip() == "":
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         return default
+    if value < 0.0 or value > 1.0:
+        return default
+    return value
 
 
 def _bool_env(name: str, default: bool = False) -> bool:
@@ -28,6 +31,8 @@ def init_sentry(service_name: str) -> bool:
         return False
 
     import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+    from sentry_sdk.integrations.rq import RqIntegration
 
     sentry_sdk.init(
         dsn=dsn,
@@ -40,6 +45,7 @@ def init_sentry(service_name: str) -> bool:
         profiles_sample_rate=_float_env("SENTRY_PROFILES_SAMPLE_RATE", 0.0),
         send_default_pii=_bool_env("SENTRY_SEND_DEFAULT_PII", False),
         server_name=f"ceres-{service_name}",
+        integrations=[FlaskIntegration(), RqIntegration()],
     )
     return True
 

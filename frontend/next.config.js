@@ -12,12 +12,18 @@ const nextConfig = {
   },
 };
 
+const sentryBuildConfigured = Boolean(
+  process.env.SENTRY_AUTH_TOKEN &&
+    process.env.SENTRY_ORG &&
+    process.env.SENTRY_PROJECT,
+);
+
 module.exports = withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
-  hideSourceMaps: true,
+  hideSourceMaps: sentryBuildConfigured,
   webpack: {
     treeshake: {
       removeDebugLogging: true,

@@ -13,11 +13,12 @@ def test_init_sentry_noops_without_dsn(monkeypatch):
 
 
 def test_init_sentry_configures_sdk_when_dsn_is_present(monkeypatch):
+    import sentry_sdk
+
     from modules.observability import init_sentry
 
     init_mock = Mock()
-    fake_sdk = SimpleNamespace(init=init_mock)
-    monkeypatch.setitem(__import__("sys").modules, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(sentry_sdk, "init", init_mock)
     monkeypatch.setenv("SENTRY_DSN", "https://example@sentry.invalid/1")
     monkeypatch.setenv("SENTRY_ENVIRONMENT", "test")
     monkeypatch.setenv("SENTRY_RELEASE", "ceres@123")
@@ -32,6 +33,26 @@ def test_init_sentry_configures_sdk_when_dsn_is_present(monkeypatch):
     assert kwargs["release"] == "ceres@123"
     assert kwargs["traces_sample_rate"] == 0.25
     assert kwargs["server_name"] == "ceres-worker"
+    integration_names = {type(x).__name__ for x in kwargs["integrations"]}
+    assert integration_names == {"FlaskIntegration", "RqIntegration"}
+
+
+def test_init_sentry_ignores_out_of_range_sample_rates(monkeypatch):
+    import sentry_sdk
+
+    from modules.observability import init_sentry
+
+    init_mock = Mock()
+    monkeypatch.setattr(sentry_sdk, "init", init_mock)
+    monkeypatch.setenv("SENTRY_DSN", "https://example@sentry.invalid/1")
+    monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "2")
+    monkeypatch.setenv("SENTRY_PROFILES_SAMPLE_RATE", "-0.5")
+
+    assert init_sentry("web") is True
+
+    kwargs = init_mock.call_args.kwargs
+    assert kwargs["traces_sample_rate"] == 0.0
+    assert kwargs["profiles_sample_rate"] == 0.0
 
 
 def test_build_new_relic_command_is_noop_without_required_env(monkeypatch):
