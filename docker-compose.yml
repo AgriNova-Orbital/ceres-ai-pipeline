@@ -40,6 +40,14 @@ services:
       - PYTHONUNBUFFERED=1
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-dev-secret}
       - RQ_LOG_LEVEL=DEBUG
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME:-Ceres API Dev}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
     ports:
       - "5055:5055"
     volumes:
@@ -58,7 +66,7 @@ services:
       target: dev
     container_name: ceres-worker-dev
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
-    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
     depends_on:
       redis:
         condition: service_healthy
@@ -67,6 +75,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=DEBUG
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_WORKER_APP_NAME:-Ceres Worker Dev}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
     volumes:
       - ./state:/app/state
       - ./data:/app/data
@@ -79,12 +95,19 @@ services:
     profiles: ["dev"]
     build:
       context: ./frontend
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-dev}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
     container_name: ceres-frontend-dev
     depends_on:
       web-dev:
         condition: service_healthy
     environment:
       - API_URL=http://web-dev:5055
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
     ports:
       - "3002:3000"
     restart: unless-stopped
@@ -105,6 +128,14 @@ services:
       - PYTHONUNBUFFERED=1
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-beta-secret}
       - RQ_LOG_LEVEL=INFO
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME:-Ceres API Beta}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
     ports:
       - "5155:5055"
     volumes:
@@ -123,7 +154,7 @@ services:
       target: beta
     container_name: ceres-worker-beta
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
-    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
     depends_on:
       redis:
         condition: service_healthy
@@ -132,6 +163,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=INFO
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_WORKER_APP_NAME:-Ceres Worker Beta}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
     volumes:
       - ./state:/app/state
       - ./data:/app/data
@@ -144,12 +183,19 @@ services:
     profiles: ["beta"]
     build:
       context: ./frontend
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-beta}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
     container_name: ceres-frontend-beta
     depends_on:
       web-beta:
         condition: service_healthy
     environment:
       - API_URL=http://web-beta:5055
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
     ports:
       - "3102:3000"
     restart: unless-stopped
@@ -170,6 +216,14 @@ services:
       - PYTHONUNBUFFERED=1
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-release-secret}
       - RQ_LOG_LEVEL=WARNING
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME:-Ceres API Release}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
     ports:
       - "5255:5055"
     volumes:
@@ -188,7 +242,7 @@ services:
       target: release
     container_name: ceres-worker-release
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
-    command: ["uv", "run", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
     depends_on:
       redis:
         condition: service_healthy
@@ -197,6 +251,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=WARNING
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_WORKER_APP_NAME:-Ceres Worker Release}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
     volumes:
       - ./state:/app/state
       - ./data:/app/data
@@ -209,12 +271,19 @@ services:
     profiles: ["release"]
     build:
       context: ./frontend
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-release}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
     container_name: ceres-frontend-release
     depends_on:
       web-release:
         condition: service_healthy
     environment:
       - API_URL=http://web-release:5055
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
     ports:
       - "3202:3000"
     restart: unless-stopped

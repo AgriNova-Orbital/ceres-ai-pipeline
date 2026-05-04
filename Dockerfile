@@ -36,7 +36,7 @@ RUN mkdir -p /app/state /app/data /app/runs /app/reports /app/logs
 ENV FLASK_ENV=development \
     RQ_LOG_LEVEL=DEBUG
 EXPOSE 5055
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "1", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "debug", "apps.wheat_risk_webui:create_app()"]
+CMD ["uv", "run", "python", "-m", "modules.observability", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "1", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "debug", "apps.wheat_risk_webui:create_app()"]
 
 FROM deps-runtime AS beta
 COPY . .
@@ -44,7 +44,7 @@ RUN mkdir -p /app/state /app/data /app/runs /app/reports /app/logs
 ENV FLASK_ENV=production \
     RQ_LOG_LEVEL=INFO
 EXPOSE 5055
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "apps.wheat_risk_webui:create_app()"]
+CMD ["uv", "run", "python", "-m", "modules.observability", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "apps.wheat_risk_webui:create_app()"]
 
 FROM deps-runtime AS release
 COPY . .
@@ -52,4 +52,4 @@ RUN mkdir -p /app/state /app/data /app/runs /app/reports /app/logs
 ENV FLASK_ENV=production \
     RQ_LOG_LEVEL=WARNING
 EXPOSE 5055
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "warning", "apps.wheat_risk_webui:create_app()"]
+CMD ["uv", "run", "python", "-m", "modules.observability", "gunicorn", "--bind", "0.0.0.0:5055", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "warning", "apps.wheat_risk_webui:create_app()"]

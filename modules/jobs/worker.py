@@ -4,8 +4,12 @@ import sys
 from redis import Redis
 from rq import Queue, Worker
 
+from modules.observability import init_sentry
+
 
 def main() -> None:
+    init_sentry("worker")
+
     listen = ["default"]
     redis_url = os.environ.get(
         "REDIS_URL", sys.argv[1] if len(sys.argv) > 1 else "redis://localhost:6379"

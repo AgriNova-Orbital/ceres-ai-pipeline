@@ -25,6 +25,7 @@ dependencies = [
     { name = "google-auth-oauthlib" },
     { name = "gunicorn" },
     { name = "matplotlib" },
+    { name = "newrelic" },
     { name = "numpy" },
     { name = "python-dotenv" },
     { name = "rasterio", version = "1.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -32,6 +33,7 @@ dependencies = [
     { name = "redis" },
     { name = "requests" },
     { name = "rq" },
+    { name = "sentry-sdk", extra = ["flask", "rq"] },
     { name = "skyfield" },
     { name = "tqdm" },
 ]
@@ -69,6 +71,7 @@ requires-dist = [
     { name = "google-auth-oauthlib", specifier = ">=1.2.0" },
     { name = "gunicorn", specifier = ">=22.0.0" },
     { name = "matplotlib", specifier = ">=3.7.0" },
+    { name = "newrelic", specifier = ">=10.0.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "rasterio", specifier = ">=1.4.4" },
@@ -77,6 +80,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "rq", specifier = ">=1.16.0" },
+    { name = "sentry-sdk", extras = ["flask", "rq"], specifier = ">=2.0.0" },
     { name = "skyfield", specifier = ">=1.46" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'ml'", specifier = "==2.5.1", index = "https://pypi.org/simple" },
     { name = "torch", marker = "sys_platform != 'darwin' and extra == 'ml'", specifier = "==2.5.1+cu121", index = "https://download.pytorch.org/whl/cu121" },
@@ -1937,6 +1941,46 @@ wheels = [
 ]
 
 [[package]]
+name = "newrelic"
+version = "12.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/16/4dd1efc8443e50ddb7f3b83ea35a45b08ded6e9bd4694e73720d90df9b8b/newrelic-12.1.0.tar.gz", hash = "sha256:309e515ae3cb7981919dd2eaf9d2c0510e46e3e3a60b915e5c79b8257ececa82", size = 1379969, upload-time = "2026-03-26T21:50:12.721Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/ed/42511d2044eeabfe42e4f7f53b2f6454e351e9cebbc24ce5f96a1621ca8a/newrelic-12.1.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:d45a99ea8499d9a922ce61dba490c50ed603b5d19f66e7927c8f7bc8543abb21", size = 913421, upload-time = "2026-03-26T21:49:15.003Z" },
+    { url = "https://files.pythonhosted.org/packages/43/ef/51a02c8ef47d1544f886948d85a3531b289bc8fa8cd118644401760b51d3/newrelic-12.1.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:977865ee5f9852963463d9eb4d5efc6c1147d1d0469b9d081604335de1b345fa", size = 916691, upload-time = "2026-03-26T21:49:16.319Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/8a/9746bff80776710d03af4d0811ebfad907375b901b86b705c1d0d0061684/newrelic-12.1.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:d3da859a78a8a4033ecab5d65c861fc45d13bd641edcabe3cc69d2894c9a1f8c", size = 915442, upload-time = "2026-03-26T21:49:17.668Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/4d/decefdf71004637470b01ff4df3f3fefdbf99a87ec5d20e8bbc160a7fd1e/newrelic-12.1.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:ef292df6ee99202bd49b9757546ed7f76e413c10a0a6d4d608d07833d6cdf375", size = 913152, upload-time = "2026-03-26T21:49:18.957Z" },
+    { url = "https://files.pythonhosted.org/packages/29/f2/379a75db8f974b941019effc6756539f4fb816e6dc0fb816c4b7ba70ddea/newrelic-12.1.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:38121407bf50c2acfd25a3d4fc2f09d81a43adb23b746b8671dfd1be785946cf", size = 921495, upload-time = "2026-03-26T21:49:20.309Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/bb/00784e122376da6482733ff9404c051bb382e20da4c477263b1f291f25b3/newrelic-12.1.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1b926f57e8845a0a29524e9c3ca3bb14bbfc90caac7ea481f0fe9f94fadb3998", size = 924190, upload-time = "2026-03-26T21:49:21.951Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/77/eda9e5864b2ef6f1ce39ae51c2762b6cdc9125ff2fb74804973f913aa155/newrelic-12.1.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:e9c561c3d80c6193683b354c424228fb9904b82efe408ded56b2093f39458ba2", size = 922079, upload-time = "2026-03-26T21:49:23.556Z" },
+    { url = "https://files.pythonhosted.org/packages/09/a9/2e7a7dbcb807e7d0ac4ae926ec4b47e2818c01721f681d1ecaf8c4672adf/newrelic-12.1.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:4441a44afdc399b72db338a17c1d7aa5a111047c011a8883a318fafe858fcb23", size = 920637, upload-time = "2026-03-26T21:49:24.895Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/64/1b675cf46b18f99f940a374056654bfd7cf622fc26f087f06ac4e55ea78d/newrelic-12.1.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:9295aed7fb26304cd6efc5d7d56ce6426251349f18889d2e0ef265583b65aa62", size = 921556, upload-time = "2026-03-26T21:49:26.357Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/03/1cfa7279245f815bf0bcb168e7592bb7e1821153ebc3af3ff2d7c79fbd2a/newrelic-12.1.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:2fdef1de8c7c505bc7a8fb3e7ce443b3faa93bf95b3a66179cce52de558c28aa", size = 924298, upload-time = "2026-03-26T21:49:27.997Z" },
+    { url = "https://files.pythonhosted.org/packages/68/f8/6463c67f16c661cb02ab7797d0f8fc70d3842213aede2c7342ed5311eb07/newrelic-12.1.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:ee10572d76136d3f2975bb02870a133ed1ddf203ff210a96de3081c620eddad3", size = 922161, upload-time = "2026-03-26T21:49:29.336Z" },
+    { url = "https://files.pythonhosted.org/packages/51/e3/33e6f03ac5d105616dfdc7140d4d191a9c7957ee8f7c7d4e521c5cff4fd6/newrelic-12.1.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:42620fffffade5852cd48ea52aaf594b3da280341f16bd2573b1664643bf30c5", size = 920696, upload-time = "2026-03-26T21:49:30.736Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/e7/d4e5fa2a8b8c66732bd8bbe02f74c1ea565128a3a60413701baca0d19083/newrelic-12.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:f21308e5cc63359e646c3322f2272f66b125e5c2e537ae3aad8f266e762ee2f7", size = 854286, upload-time = "2026-03-26T21:49:31.999Z" },
+    { url = "https://files.pythonhosted.org/packages/39/a0/10a3861a27597430ecb9df0cd4d28dbc5f03075d7854d7fc39105d20e8ee/newrelic-12.1.0-cp313-cp313-win_arm64.whl", hash = "sha256:bdef608293bd28ca658baa5c775cb26695bdcbbd226ed16771aed6f1a4e71e7a", size = 851665, upload-time = "2026-03-26T21:49:33.826Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/04/86025e13562e45234dfb7ba4a5115e4b7ddf56b6154ce079ed89bd419b6e/newrelic-12.1.0-cp313-cp313t-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:820de18c42571949c0f3f9a4601a36cde1915fc8f1debea6f57ce405c3ae423f", size = 955006, upload-time = "2026-03-26T21:49:35.557Z" },
+    { url = "https://files.pythonhosted.org/packages/07/f0/aca49eddfd6ce128ee9de84eaefc6e3efd23cc1935316f261a3dd5da3bba/newrelic-12.1.0-cp313-cp313t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:44b44b792ea5bd90fbc54e6b2a87fbba0c26d2a1b1d219a44ee1154e86aa4f75", size = 962899, upload-time = "2026-03-26T21:49:36.93Z" },
+    { url = "https://files.pythonhosted.org/packages/68/c8/c5cee15cbee6ff7da6de61f0b3c593f0b8115e5e0e09a5a652a4fb81a2f0/newrelic-12.1.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:4dafb7806c67b39e32559ab4845a0fc91a8f5fa137c6e7df9b8951b8478e75ac", size = 958837, upload-time = "2026-03-26T21:49:38.771Z" },
+    { url = "https://files.pythonhosted.org/packages/50/31/0486249881c921ad9e854fea1f0ccc58ce476a6f9f695c92b4fdaabcd86e/newrelic-12.1.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:03f1a9709a807365bfb1d3fb9ced04c9e4fe052f0214010d7f40c6cb31c033b2", size = 952457, upload-time = "2026-03-26T21:49:40.459Z" },
+    { url = "https://files.pythonhosted.org/packages/31/73/a46c488c06f383b842dc9a6622f827d8cd29a1ad64b4cb984191a788ad39/newrelic-12.1.0-cp313-cp313t-win_amd64.whl", hash = "sha256:0f08278968698ab03983959b09fa4ad71e85d3c110c550a9162644fc499c4167", size = 857330, upload-time = "2026-03-26T21:49:41.885Z" },
+    { url = "https://files.pythonhosted.org/packages/59/37/58ae0d6fd2e3469493e709354ef457eef855a858612546eb6b98589e5c54/newrelic-12.1.0-cp313-cp313t-win_arm64.whl", hash = "sha256:7764cab572224217931a7bd473c39038d316781ba0693c7adfb50a1da04b78fe", size = 853401, upload-time = "2026-03-26T21:49:43.25Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/7d/1f53b4a73619d39ee18cdbb1003b24c153ac846ebaaccfa37e20d6886306/newrelic-12.1.0-cp314-cp314-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:65eaa0eb614594c9892601f7a0e4e7b9c6efbc16f2c95aeb10178c5a693cd344", size = 920511, upload-time = "2026-03-26T21:49:45.131Z" },
+    { url = "https://files.pythonhosted.org/packages/33/b0/bf5219829f0b2f3bfdbcea5171a022ad6f4c979f1f430bff59ad52f4f716/newrelic-12.1.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:97b2bc236fec4fbfcd9e53b3bb7f63344fc89b3b2021dece5608ee6f009845bf", size = 924050, upload-time = "2026-03-26T21:49:46.675Z" },
+    { url = "https://files.pythonhosted.org/packages/00/2c/9ae170a9e13bc4c9125a7c85b7d0a031c69b3c7dbe51861b2ee9b7dcdee1/newrelic-12.1.0-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:6cb2c1b7d93a3c7945bed0d9c61f91dab1e93de8f803679db76ca2056b864ec4", size = 921878, upload-time = "2026-03-26T21:49:48.728Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/b8/fecad76aa1b9e4aa7572d15dd42f9b65a909027953ad83b852e1bb84feef/newrelic-12.1.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:f220830707cb4af47d403b22c5934854ac1331460ddda9204d42882b55059dde", size = 919652, upload-time = "2026-03-26T21:49:50.24Z" },
+    { url = "https://files.pythonhosted.org/packages/92/fe/96bb83fc0919843aaa161ff02d1a78ab58574e8e63cb2c09d88fa71b20de/newrelic-12.1.0-cp314-cp314-win_amd64.whl", hash = "sha256:13d4ec1f00db7868237d30cc92d4191139b38b5215f0f0ff194736749800ccc6", size = 853352, upload-time = "2026-03-26T21:49:52.346Z" },
+    { url = "https://files.pythonhosted.org/packages/be/ae/489d56517d58844cd53facd7c36ced6458e884988ceae9a14a19988cea05/newrelic-12.1.0-cp314-cp314-win_arm64.whl", hash = "sha256:a2057b4379c6f8e6349840433998c9df7abc1175b7ec66229e70ce0a6b66aa0d", size = 850549, upload-time = "2026-03-26T21:49:53.984Z" },
+    { url = "https://files.pythonhosted.org/packages/da/10/7f844635367fcf9721970a850105affc7793f749f80862f0fc20b42e4657/newrelic-12.1.0-cp314-cp314t-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:6f32c4d5cae4bea17d385480f86ca98d841480af166243271b233244c3c7a4e0", size = 955001, upload-time = "2026-03-26T21:49:56.074Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/ac/f24078c8aa40ba6340faa3ababf0503c47d5c73944b102254c7a3db8493b/newrelic-12.1.0-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:214a06e33af8c973909b272a9508feaa11feddb924494157944cdf8dd51c8239", size = 962889, upload-time = "2026-03-26T21:49:57.657Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/67/6efae990302d435511867a83e2c61433489d421355fca1388c8e9fd950c3/newrelic-12.1.0-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:4dc1833bbd271390cbf9a671f50566924344efdd68025dca12230321d3d5dc2d", size = 958832, upload-time = "2026-03-26T21:49:59.088Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/ab/72cae97164de845590c23d9c9b930a4242ec7aa7cc44454ea07ded5697be/newrelic-12.1.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:3fbd2adcf20f4ef0cae3379feb0c354c1d34ac139035d1f21f69669f488a907d", size = 952482, upload-time = "2026-03-26T21:50:00.561Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/b2/97cf773ff6921353c109eb6763313651d91da38302bde9f62f8d7c813410/newrelic-12.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:bf618a355b49aac3118266aa743a159201247266f330bccd7c0035a9939c396a", size = 856775, upload-time = "2026-03-26T21:50:02.433Z" },
+    { url = "https://files.pythonhosted.org/packages/11/cf/60db73f4af7c5e4fe06a926b2553e51ae0fe5a5fc60ba80c18c22932950d/newrelic-12.1.0-cp314-cp314t-win_arm64.whl", hash = "sha256:1b37f10844fd27b81d80351d1c3623e0fda434b86b01e3942ff4511161df5eee", size = 852149, upload-time = "2026-03-26T21:50:03.919Z" },
+]
+
+[[package]]
 name = "numpy"
 version = "2.4.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3393,6 +3437,29 @@ wheels = [
 ]
 
 [[package]]
+name = "sentry-sdk"
+version = "2.58.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/26/b3/fb8291170d0e844173164709fc0fa0c221ed75a5da740c8746f2a83b4eb1/sentry_sdk-2.58.0.tar.gz", hash = "sha256:c1144d947352d54e5b7daa63596d9f848adf684989c06c4f5a659f0c85a18f6f", size = 438764, upload-time = "2026-04-13T17:23:26.265Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/eb/d875669993b762556ae8b2efd86219943b4c0864d22204d622a9aee3052b/sentry_sdk-2.58.0-py2.py3-none-any.whl", hash = "sha256:688d1c704ddecf382ea3326f21a67453d4caa95592d722b7c780a36a9d23109e", size = 460919, upload-time = "2026-04-13T17:23:24.675Z" },
+]
+
+[package.optional-dependencies]
+flask = [
+    { name = "blinker" },
+    { name = "flask" },
+    { name = "markupsafe" },
+]
+rq = [
+    { name = "rq" },
+]
+
+[[package]]
 name = "setuptools"
 version = "82.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3428,6 +3495,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/62/45/0e35398ef8d4b07ecfa9f7f680e183b2b6af9215a56af34f9e621c29b495/sgp4-2.25-cp313-cp313-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5789b7add136362684dfcbf0862919f8c3018f74ab11a05a9964edd5fdd4d2a7", size = 235584, upload-time = "2025-08-04T18:02:07.152Z" },
     { url = "https://files.pythonhosted.org/packages/47/b7/1b680b5514586b3860500109ef37fd1761f21e6787f20a2597baa44d91a0/sgp4-2.25-cp313-cp313-win32.whl", hash = "sha256:94219b486def29aa1246f42de8bea05ccb8e98a5458dd08ce42b9811c79ca814", size = 161896, upload-time = "2025-08-04T18:02:08.062Z" },
     { url = "https://files.pythonhosted.org/packages/67/c1/a22be2e7886db40d1512969f3b8cc3ce989167e69ea8f308f26afd1dfd31/sgp4-2.25-cp313-cp313-win_amd64.whl", hash = "sha256:dec2f6c842d9bf40c67d5764bd752980844f91f338020d2af7f85847364d0ff7", size = 164142, upload-time = "2025-08-04T18:02:09Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/47/8231e3d4a88341316ec8d0eb98d3a8a972477d8b038555259522735a8371/sgp4-2.25-py3-none-any.whl", hash = "sha256:4f39ecf6c2663109fed04adfe9982815ac83893271b521d92d5b186820f8c78e", size = 137376, upload-time = "2026-04-27T18:29:23.71Z" },
 ]
 
 [[package]]
@@ -3578,11 +3646,11 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp311-cp311-linux_x86_64.whl", hash = "sha256:c8ab8c92eab928a93c483f83ca8c63f13dafc10fc93ad90ed2dcb7c82ea50410" },
-    { url = "https://download.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp311-cp311-win_amd64.whl", hash = "sha256:4bcee18f00c43c815efad8efaa3bca584ffdc8d2cd35ef4c44c814f2739d9191" },
-    { url = "https://download.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp312-cp312-linux_x86_64.whl", hash = "sha256:222be02548c2e74a21a8fbc8e5b8d2eef9f9faee865d70385d2eb1b9aabcbc76" },
-    { url = "https://download.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp312-cp312-win_amd64.whl", hash = "sha256:473d76257636c66b22cbfac6f616d6b522ef3d3473c13decb1afda22a7b059eb" },
-    { url = "https://download.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp313-cp313-linux_x86_64.whl", hash = "sha256:1bfe18b79b0ff9be9383257a66c3f84621ce5f384f02c0a7c79503583d6ffd4b" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp311-cp311-linux_x86_64.whl", hash = "sha256:c8ab8c92eab928a93c483f83ca8c63f13dafc10fc93ad90ed2dcb7c82ea50410", upload-time = "2024-10-29T23:18:06Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp311-cp311-win_amd64.whl", hash = "sha256:4bcee18f00c43c815efad8efaa3bca584ffdc8d2cd35ef4c44c814f2739d9191", upload-time = "2024-10-29T23:18:42Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp312-cp312-linux_x86_64.whl", hash = "sha256:222be02548c2e74a21a8fbc8e5b8d2eef9f9faee865d70385d2eb1b9aabcbc76", upload-time = "2024-10-29T23:20:25Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp312-cp312-win_amd64.whl", hash = "sha256:473d76257636c66b22cbfac6f616d6b522ef3d3473c13decb1afda22a7b059eb", upload-time = "2024-10-29T23:20:59Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torch-2.5.1%2Bcu121-cp313-cp313-linux_x86_64.whl", hash = "sha256:1bfe18b79b0ff9be9383257a66c3f84621ce5f384f02c0a7c79503583d6ffd4b", upload-time = "2024-10-29T23:22:42Z" },
 ]
 
 [[package]]
@@ -3615,10 +3683,10 @@ dependencies = [
     { name = "torch", version = "2.5.1+cu121", source = { registry = "https://download.pytorch.org/whl/cu121" }, marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp311-cp311-linux_x86_64.whl", hash = "sha256:9e6f03e6410cb3557978dea25fb30ce3e7c165e8377fcc8e0e1ddc700503d38b" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp311-cp311-win_amd64.whl", hash = "sha256:f9397ff9c6e8fa1b4fdc94939411ac65fe43f66d66367ee80603bc7ce10e18e2" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp312-cp312-linux_x86_64.whl", hash = "sha256:5648a01f23033f15d60dc638f91c2d4c66c0a01621162471e806064acda63b70" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp312-cp312-win_amd64.whl", hash = "sha256:80400d75da5852bb5491f6259d47a163a00c2d1479ed57d3d95fde205e1b2815" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp311-cp311-linux_x86_64.whl", hash = "sha256:9e6f03e6410cb3557978dea25fb30ce3e7c165e8377fcc8e0e1ddc700503d38b", upload-time = "2024-10-29T23:25:38Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp311-cp311-win_amd64.whl", hash = "sha256:f9397ff9c6e8fa1b4fdc94939411ac65fe43f66d66367ee80603bc7ce10e18e2", upload-time = "2024-10-29T23:25:38Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp312-cp312-linux_x86_64.whl", hash = "sha256:5648a01f23033f15d60dc638f91c2d4c66c0a01621162471e806064acda63b70", upload-time = "2024-10-29T23:25:39Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchaudio-2.5.1%2Bcu121-cp312-cp312-win_amd64.whl", hash = "sha256:80400d75da5852bb5491f6259d47a163a00c2d1479ed57d3d95fde205e1b2815", upload-time = "2024-10-29T23:25:39Z" },
 ]
 
 [[package]]
@@ -3655,10 +3723,10 @@ dependencies = [
     { name = "torch", version = "2.5.1+cu121", source = { registry = "https://download.pytorch.org/whl/cu121" }, marker = "sys_platform != 'darwin'" },
 ]
 wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp311-cp311-linux_x86_64.whl", hash = "sha256:237609a3551c2b68f32bcd3f3875dca93836010d83922ef2f3bd3a7540caee58" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp311-cp311-win_amd64.whl", hash = "sha256:00143c941b30f2d5001b58f8caada826aaa4dce94b8ae4192730e5c34165fa8c" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp312-cp312-linux_x86_64.whl", hash = "sha256:48cf3a716f70370ed5dcb656e7497415ef37860b07e67ea4b1ef8598efe28445" },
-    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp312-cp312-win_amd64.whl", hash = "sha256:12b764936fc3fde29d7165adc7c721e491fa75c7a498c9fbaa08757b5fe59fe7" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp311-cp311-linux_x86_64.whl", hash = "sha256:237609a3551c2b68f32bcd3f3875dca93836010d83922ef2f3bd3a7540caee58", upload-time = "2024-10-29T23:25:42Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp311-cp311-win_amd64.whl", hash = "sha256:00143c941b30f2d5001b58f8caada826aaa4dce94b8ae4192730e5c34165fa8c", upload-time = "2024-10-29T23:25:42Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp312-cp312-linux_x86_64.whl", hash = "sha256:48cf3a716f70370ed5dcb656e7497415ef37860b07e67ea4b1ef8598efe28445", upload-time = "2024-10-29T23:25:42Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu121/torchvision-0.20.1%2Bcu121-cp312-cp312-win_amd64.whl", hash = "sha256:12b764936fc3fde29d7165adc7c721e491fa75c7a498c9fbaa08757b5fe59fe7", upload-time = "2024-10-29T23:25:43Z" },
 ]
 
 [[package]]

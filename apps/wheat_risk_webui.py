@@ -39,6 +39,7 @@ from apps.api_auth import register_auth_api
 from apps.api_admin import register_admin_api
 from apps.api_runs import register_runs_api
 from apps.api_oauth import register_oauth_api
+from modules.observability import init_sentry
 
 
 _FAKE_REDIS_SERVER = None
@@ -197,6 +198,8 @@ def _parse_int_csv(text: str, *, one_based: bool = False) -> list[int]:
 
 
 def create_app(repo_root: Path | str | None = None) -> Flask:
+    init_sentry("web")
+
     app_root = Path(__file__).resolve().parent
     root = Path(repo_root) if repo_root is not None else app_root.parent
 
