@@ -19,6 +19,7 @@ from flask import (
     Response,
     flash,
     jsonify,
+    g,
     redirect,
     render_template,
     request,
@@ -307,17 +308,48 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             return None
         if request.endpoint is None:
             return None
-        if request.endpoint and (
-            request.endpoint.startswith("api_auth.")
-            or request.endpoint.startswith("api_admin.")
-            or request.endpoint.startswith("api_runs.")
-            or request.endpoint.startswith("api_oauth.")
-        ):
+        if request.endpoint and _requires_clerk_api_auth(request.endpoint):
+            return _require_clerk_api_auth()
+        if request.endpoint and request.endpoint.startswith("api_auth."):
             return None
         if "user" not in session:
             return redirect(url_for("login"))
         if sqlite_store.is_default_password() and request.endpoint != "change_password":
             return redirect(url_for("change_password"))
+        return None
+
+    def _requires_clerk_api_auth(endpoint: str) -> bool:
+        return endpoint.startswith(("api_admin.", "api_runs.", "api_oauth.")) or endpoint in {
+            "jobs_json",
+            "preview_raw",
+            "preview_patch",
+        }
+
+    def _require_clerk_api_auth() -> Response | None:
+        from modules import clerk_auth
+
+        if not clerk_auth.is_clerk_auth_enabled():
+            return None
+        if request.endpoint == "api_oauth.oauth_callback":
+            pending_user = session.pop("pending_clerk_user", None)
+            if isinstance(pending_user, dict) and pending_user.get("sub"):
+                g.clerk_user = pending_user
+                return None
+            return jsonify(error="Not authenticated"), 401
+        try:
+            token = clerk_auth.extract_bearer_token(request.headers.get("Authorization"))
+            user = clerk_auth.verify_clerk_token(token)
+        except clerk_auth.ClerkAuthError:
+            return jsonify(error="Not authenticated"), 401
+        except clerk_auth.ClerkVerificationUnavailable:
+            app.logger.warning("Clerk verification unavailable", exc_info=True)
+            return jsonify(error="Authentication service unavailable"), 503
+        if request.endpoint == "api_oauth.oauth_login":
+            pending_user = {"sub": str(user["sub"])}
+            if user.get("exp") is not None:
+                pending_user["exp"] = user["exp"]
+            session["pending_clerk_user"] = pending_user
+        g.clerk_user = user
         return None
 
     register_auth_api(app, sqlite_store)

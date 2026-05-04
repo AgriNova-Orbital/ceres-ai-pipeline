@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 
 def register_runs_api(
@@ -17,6 +17,12 @@ def register_runs_api(
 
     def _now_iso():
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    def _current_user_id() -> str | None:
+        clerk_user = getattr(g, "clerk_user", None)
+        if isinstance(clerk_user, dict) and clerk_user.get("sub"):
+            return str(clerk_user["sub"])
+        return None
 
     def _job_info(j) -> dict:
         """Extract useful info from an RQ job."""
@@ -130,7 +136,7 @@ def register_runs_api(
                 ), 400
 
             payload: dict[str, Any] = {
-                "user_id": None,
+                "user_id": _current_user_id(),
                 "stage": str(data.get("stage", "1")),
                 "start_date": str(data.get("start_date", "2025-01-01")),
                 "end_date": str(data.get("end_date", "2025-12-31")),
@@ -153,7 +159,7 @@ def register_runs_api(
                 "data/raw/france_2025_weekly",
             )
             payload = {
-                "user_id": None,
+                "user_id": _current_user_id(),
                 "input_dir": raw_dir,
                 "output_dir": str(root / "reports"),
                 "start_date_str": str(data.get("start_date", "2025-01-01")),
@@ -186,7 +192,7 @@ def register_runs_api(
 
         patch = {"1": 64, "2": 32, "4": 16}.get(str(level), 64)
         payload = {
-            "user_id": None,
+            "user_id": _current_user_id(),
             "input_dir": raw_dir,
             "output_dir": str(root / "data" / "wheat_risk" / "staged" / f"L{level}"),
             "patch_size": patch,
@@ -216,7 +222,7 @@ def register_runs_api(
 
         if action == "dry_run":
             payload = {
-                "user_id": None,
+                "user_id": _current_user_id(),
                 "levels": _parse_int_list(
                     str(data.get("levels", "1,2,4")), field="levels"
                 ),
@@ -250,7 +256,7 @@ def register_runs_api(
 
         if action == "run_matrix":
             payload = {
-                "user_id": None,
+                "user_id": _current_user_id(),
                 "levels": _parse_int_list(
                     str(data.get("levels", "1,2,4")), field="levels"
                 ),
@@ -299,7 +305,7 @@ def register_runs_api(
     def api_run_eval():
         data = request.get_json(silent=True) or {}
         payload = {
-            "user_id": None,
+            "user_id": _current_user_id(),
             "summary_csv": Path(
                 str(data.get("summary_csv", "runs/staged_final/summary.csv"))
             ),
