@@ -191,12 +191,31 @@ def test_oauth_callback_uses_pending_clerk_session_without_bearer(
     app = create_app(repo_root=tmp_path)
     client = app.test_client()
     with client.session_transaction() as sess:
-        sess["pending_clerk_user"] = {"sub": "user_clerk_123"}
+        sess["pending_clerk_user"] = {"sub": "user_clerk_123", "exp": 2000000000}
 
     resp = client.get("/api/oauth/callback")
 
     assert resp.status_code in {302, 401}
     assert resp.status_code != 401 or resp.get_json()["error"] != "Not authenticated"
+    with client.session_transaction() as sess:
+        assert "pending_clerk_user" not in sess
+
+
+def test_oauth_callback_rejects_expired_pending_clerk_session(
+    monkeypatch, tmp_path: Path
+):
+    _enable_clerk(monkeypatch)
+
+    from apps.wheat_risk_webui import create_app
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["pending_clerk_user"] = {"sub": "user_clerk_123", "exp": 1}
+
+    resp = client.get("/api/oauth/callback")
+
+    assert resp.status_code == 401
+    assert resp.get_json()["error"] == "Not authenticated"
     with client.session_transaction() as sess:
         assert "pending_clerk_user" not in sess
 

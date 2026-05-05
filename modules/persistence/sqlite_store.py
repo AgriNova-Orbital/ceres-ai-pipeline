@@ -53,6 +53,7 @@ class SQLiteStore:
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     google_sub TEXT NOT NULL UNIQUE,
+                    clerk_user_id TEXT UNIQUE,
                     email TEXT NOT NULL,
                     display_name TEXT,
                     created_at TEXT NOT NULL,
@@ -70,6 +71,15 @@ class SQLiteStore:
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
                 """
+            )
+            columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+            }
+            if "clerk_user_id" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN clerk_user_id TEXT")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_user_id "
+                "ON users(clerk_user_id) WHERE clerk_user_id IS NOT NULL"
             )
             cur = conn.execute("SELECT id FROM app_settings WHERE id = 1")
             row = cur.fetchone()
@@ -188,9 +198,19 @@ class SQLiteStore:
         self.ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, google_sub, email, display_name, created_at, last_login_at "
+                "SELECT id, google_sub, clerk_user_id, email, display_name, created_at, last_login_at "
                 "FROM users WHERE google_sub = ?",
                 (google_sub,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_user_by_clerk_user_id(self, clerk_user_id: str) -> dict[str, Any] | None:
+        self.ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, google_sub, clerk_user_id, email, display_name, created_at, last_login_at "
+                "FROM users WHERE clerk_user_id = ?",
+                (clerk_user_id,),
             ).fetchone()
         return dict(row) if row else None
 
@@ -200,25 +220,38 @@ class SQLiteStore:
         google_sub: str,
         email: str,
         display_name: str | None,
+        clerk_user_id: str | None = None,
     ) -> dict[str, Any]:
         existing = self.get_user_by_google_sub(google_sub)
         now = _now_iso()
         if existing is not None:
             with self._connect() as conn:
                 conn.execute(
-                    "UPDATE users SET email=?, display_name=?, last_login_at=? WHERE google_sub=?",
-                    (email, display_name, now, google_sub),
+                    "UPDATE users SET email=?, display_name=?, clerk_user_id=COALESCE(?, clerk_user_id), last_login_at=? WHERE google_sub=?",
+                    (email, display_name, clerk_user_id, now, google_sub),
                 )
             updated = self.get_user_by_google_sub(google_sub)
             if updated is None:
                 raise RuntimeError("user disappeared after update")
             return updated
+        if clerk_user_id:
+            linked = self.get_user_by_clerk_user_id(clerk_user_id)
+            if linked is not None:
+                with self._connect() as conn:
+                    conn.execute(
+                        "UPDATE users SET google_sub=?, email=?, display_name=?, last_login_at=? WHERE id=?",
+                        (google_sub, email, display_name, now, linked["id"]),
+                    )
+                updated = self.get_user_by_clerk_user_id(clerk_user_id)
+                if updated is None:
+                    raise RuntimeError("user disappeared after clerk update")
+                return updated
         user_id = str(uuid.uuid4())
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO users (id, google_sub, email, display_name, created_at, last_login_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (user_id, google_sub, email, display_name, now, now),
+                "INSERT INTO users (id, google_sub, clerk_user_id, email, display_name, created_at, last_login_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (user_id, google_sub, clerk_user_id, email, display_name, now, now),
             )
         created = self.get_user_by_google_sub(google_sub)
         if created is None:
@@ -226,6 +259,7 @@ class SQLiteStore:
         return created
 
     def save_user_oauth_token(self, *, user_id: str, token: dict[str, Any]) -> None:
+        self.ensure_schema()
         payload = json.dumps(token, sort_keys=True)
         now = _now_iso()
         with self._connect() as conn:
@@ -244,6 +278,7 @@ class SQLiteStore:
                 )
 
     def get_user_oauth_token(self, user_id: str) -> dict[str, Any] | None:
+        self.ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT token_json FROM user_oauth_tokens WHERE user_id = ?",
@@ -251,6 +286,18 @@ class SQLiteStore:
             ).fetchone()
         return json.loads(row["token_json"]) if row and row["token_json"] else None
 
+    def get_user_oauth_token_for_principal(
+        self, user_id: str
+    ) -> dict[str, Any] | None:
+        token = self.get_user_oauth_token(user_id)
+        if token is not None:
+            return token
+        user = self.get_user_by_clerk_user_id(user_id)
+        if user is None:
+            return None
+        return self.get_user_oauth_token(user["id"])
+
     def delete_user_oauth_token(self, user_id: str) -> None:
+        self.ensure_schema()
         with self._connect() as conn:
             conn.execute("DELETE FROM user_oauth_tokens WHERE user_id = ?", (user_id,))

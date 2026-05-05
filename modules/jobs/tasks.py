@@ -17,7 +17,6 @@ from modules.download_progress import (
 from modules.drive_oauth import (
     build_drive_service_from_oauth_token,
     download_file,
-    get_drive_service,
     list_folder_files,
 )
 from modules.merge_geotiffs import _group_key, ingest_downloaded_geotiffs
@@ -38,6 +37,18 @@ def _set_progress(step: str, pct: int | None = None) -> None:
     if pct is not None:
         fields["progress"] = pct
     _set_job_meta(**fields)
+
+
+def _stored_oauth_token_for_user(user_id: Any) -> dict[str, Any] | None:
+    if not user_id:
+        return None
+    try:
+        from modules.persistence.sqlite_store import SQLiteStore
+
+        store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
+        return store.get_user_oauth_token_for_principal(str(user_id))
+    except Exception:
+        return None
 
 
 def run_script(
@@ -73,13 +84,9 @@ def task_run_script_for_user(kwargs: dict[str, Any]) -> dict:
     cwd = kwargs.pop("cwd", ".")
     _set_progress(f"preparing: {cmd[0] if cmd else '?'}", 0)
     env_overrides: dict[str, str] = {}
-    if user_id:
-        from modules.persistence.sqlite_store import SQLiteStore
-
-        store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
-        token = store.get_user_oauth_token(user_id)
-        if token:
-            env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
+    token = _stored_oauth_token_for_user(user_id)
+    if token:
+        env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
     return run_script(cmd=cmd, cwd=cwd, env_overrides=env_overrides or None)
 
 
@@ -104,13 +111,16 @@ def task_export_weekly_risk_rasters(kwargs: dict[str, Any]) -> dict[str, Any]:
         }
 
     env_overrides: dict[str, str] = {}
-    if user_id:
-        from modules.persistence.sqlite_store import SQLiteStore
-
-        store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
-        token = store.get_user_oauth_token(user_id)
-        if token:
-            env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
+    token = _stored_oauth_token_for_user(user_id)
+    if token:
+        env_overrides["GOOGLE_OAUTH_TOKEN_JSON"] = json.dumps(token)
+    elif run:
+        _set_progress("failed", 100)
+        return {
+            "returncode": 2,
+            "stdout": "",
+            "stderr": "Google OAuth token not found for user",
+        }
 
     argv: list[str] = [
         "--stage",
@@ -222,37 +232,26 @@ def task_run_inventory(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 def task_drive_download(kwargs: dict[str, Any]) -> dict[str, Any]:
-    oauth_token = kwargs.pop("oauth_token", None)
+    kwargs.pop("oauth_token", None)
+    user_id = kwargs.pop("user_id", None)
     folder_id = kwargs.pop("folder_id", None)
     file_ids = kwargs.pop("file_ids", []) or []
     save_dir = Path(kwargs["save_dir"])
 
-    credentials_json = Path("credentials.json")
-    token_json = Path("token.json")
-
-    if not oauth_token:
-        # fallback to latest stored Drive token in SQLite
-        try:
-            from modules.persistence.sqlite_store import SQLiteStore
-
-            store = SQLiteStore(Path(os.environ["APP_DB_PATH"]))
-            with store._connect() as conn:
-                row = conn.execute(
-                    "SELECT token_json FROM user_oauth_tokens ORDER BY updated_at DESC LIMIT 1"
-                ).fetchone()
-            if row and row["token_json"]:
-                oauth_token = json.loads(row["token_json"])
-        except Exception:
-            oauth_token = None
+    oauth_token = _stored_oauth_token_for_user(user_id)
 
     _set_progress("connecting to drive", 0)
-    if oauth_token:
-        svc = build_drive_service_from_oauth_token(oauth_token)
-    else:
-        svc = get_drive_service(
-            credentials_json=credentials_json,
-            token_json=token_json,
-        )
+    if not oauth_token:
+        _set_progress("failed", 100)
+        return {
+            "downloaded": 0,
+            "requested": 0,
+            "total_size": 0,
+            "skipped_existing": 0,
+            "overwritten": 0,
+            "warnings": ["OAuth token not found for user"],
+        }
+    svc = build_drive_service_from_oauth_token(oauth_token)
 
     if file_ids:
         drive_files = []

@@ -19,7 +19,10 @@ def test_api_oauth_login_requests_offline_access(tmp_path: Path):
         oauth_client_secret_path=str(secret),
         redirect_base_url="http://127.0.0.1:3002",
     )
+    app.config["SQLITE_STORE"].set_admin("admin", "strong-test-password")
     client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["user"] = {"username": "admin"}
 
     resp = client.get("/api/oauth/login")
 

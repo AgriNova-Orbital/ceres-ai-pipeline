@@ -299,9 +299,6 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "change_password",
             "static",
             "api_auth",
-            "drive_list",
-            "drive_estimate",
-            "drive_download",
             "healthz",
         }
         if request.endpoint in allowed:
@@ -309,7 +306,11 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if request.endpoint is None:
             return None
         if request.endpoint and _requires_clerk_api_auth(request.endpoint):
-            return _require_clerk_api_auth()
+            response = _require_clerk_api_auth()
+            if response is not None:
+                return response
+            if getattr(g, "clerk_user", None) is not None:
+                return None
         if request.endpoint and request.endpoint.startswith("api_auth."):
             return None
         if "user" not in session:
@@ -320,6 +321,9 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
 
     def _requires_clerk_api_auth(endpoint: str) -> bool:
         return endpoint.startswith(("api_admin.", "api_runs.", "api_oauth.")) or endpoint in {
+            "drive_list",
+            "drive_estimate",
+            "drive_download",
             "jobs_json",
             "preview_raw",
             "preview_patch",
@@ -333,6 +337,12 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         if request.endpoint == "api_oauth.oauth_callback":
             pending_user = session.pop("pending_clerk_user", None)
             if isinstance(pending_user, dict) and pending_user.get("sub"):
+                try:
+                    exp = float(pending_user["exp"])
+                except (KeyError, TypeError, ValueError):
+                    return jsonify(error="Not authenticated"), 401
+                if exp <= datetime.now(timezone.utc).timestamp():
+                    return jsonify(error="Not authenticated"), 401
                 g.clerk_user = pending_user
                 return None
             return jsonify(error="Not authenticated"), 401
@@ -351,6 +361,13 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             session["pending_clerk_user"] = pending_user
         g.clerk_user = user
         return None
+
+    def _current_oauth_principal_id() -> str | None:
+        clerk_user = getattr(g, "clerk_user", None)
+        if isinstance(clerk_user, dict) and clerk_user.get("sub"):
+            return str(clerk_user["sub"])
+        user_id = session.get("user_id")
+        return str(user_id) if user_id else None
 
     register_auth_api(app, sqlite_store)
     register_admin_api(app, sqlite_store, get_redis_conn(), app.config["JOB_HISTORY"])
@@ -774,16 +791,12 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             )
             import googleapiclient.discovery
 
-            # Get the most recent token from any user
-            with sqlite_store._connect() as conn:
-                row = conn.execute(
-                    "SELECT token_json FROM user_oauth_tokens ORDER BY updated_at DESC LIMIT 1"
-                ).fetchone()
-            if not row or not row["token_json"]:
+            principal_id = _current_oauth_principal_id()
+            if not principal_id:
                 return None
-            import json as _json
-
-            token = _json.loads(row["token_json"])
+            token = sqlite_store.get_user_oauth_token_for_principal(principal_id)
+            if not token:
+                return None
             creds = build_google_credentials_from_oauth_token(token)
             return googleapiclient.discovery.build("drive", "v3", credentials=creds)
         except Exception:
@@ -905,6 +918,7 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             "file_ids": file_ids,
             "save_dir": save_dir,
             "oauth_token": None,
+            "user_id": _current_oauth_principal_id(),
         }
         target = f"folder:{folder_id}" if folder_id else f"files:{len(file_ids)}"
         job = queue.enqueue(
