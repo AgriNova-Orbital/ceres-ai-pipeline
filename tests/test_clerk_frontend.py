@@ -71,6 +71,8 @@ def test_clerk_uses_current_app_router_apis_only() -> None:
             FRONTEND / "proxy.ts",
             FRONTEND / "middleware.ts",
             FRONTEND / "app" / "layout.tsx",
+            FRONTEND / "app" / "login" / "page.tsx",
+            FRONTEND / "app" / "register" / "page.tsx",
             FRONTEND / "components" / "ClerkAuthControls.tsx",
         ]
     )
@@ -89,3 +91,22 @@ def test_clerk_env_placeholders_are_documented() -> None:
 
     assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=" in env_example
     assert "CLERK_SECRET_KEY=" in env_example
+
+
+def test_login_and_register_pages_use_clerk_components() -> None:
+    login = (FRONTEND / "app" / "login" / "page.tsx").read_text()
+    register = (FRONTEND / "app" / "register" / "page.tsx").read_text()
+
+    assert "SignIn" in login
+    assert "@clerk/nextjs" in login
+    assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" in login
+    assert "Clerk is not configured" in login
+    assert "LoginForm" not in login
+    assert "/api/auth/login" not in login
+
+    assert "SignUp" in register
+    assert "@clerk/nextjs" in register
+    assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" in register
+    assert "Clerk is not configured" in register
+    assert "/api/auth/register" not in register
+    assert "Create Admin Account" not in register
