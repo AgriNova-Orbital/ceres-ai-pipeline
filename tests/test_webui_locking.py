@@ -8,7 +8,7 @@ from pathlib import Path
 def _initialize_app(app, tmp_path: Path) -> None:
     secret = tmp_path / "client_secret.json"
     secret.write_text(
-        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/auth/callback"]}}',
+        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/api/oauth/callback"]}}',
         encoding="utf-8",
     )
     app.config["SQLITE_STORE"].save_settings(
@@ -16,6 +16,7 @@ def _initialize_app(app, tmp_path: Path) -> None:
         oauth_client_secret_path=str(secret),
         redirect_base_url="http://127.0.0.1:5055",
     )
+    app.config["SQLITE_STORE"].set_admin("admin", "strong-test-password")
     app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
 
 

@@ -8,6 +8,19 @@ def test_run_script_task_executes_subprocess() -> None:
     assert result["cwd"] == "."
 
 
+def _store_drive_token(monkeypatch, tmp_path, user_id: str = "user-test") -> str:
+    from modules.persistence.sqlite_store import SQLiteStore
+
+    db_path = tmp_path / "app.db"
+    monkeypatch.setenv("APP_DB_PATH", str(db_path))
+    store = SQLiteStore(db_path)
+    store.save_user_oauth_token(
+        user_id=user_id,
+        token={"access_token": f"token-{user_id}", "scope": "drive"},
+    )
+    return user_id
+
+
 def test_task_export_weekly_risk_rasters_runs_script_main_with_args(
     monkeypatch,
 ) -> None:
@@ -59,6 +72,35 @@ def test_task_export_weekly_risk_rasters_requires_drive_folder_when_run() -> Non
     assert "drive_folder" in str(result["stderr"])
 
 
+def test_task_export_weekly_risk_rasters_fails_closed_without_user_token(
+    monkeypatch, tmp_path
+) -> None:
+    from modules.jobs.tasks import task_export_weekly_risk_rasters
+
+    monkeypatch.setenv("APP_DB_PATH", str(tmp_path / "app.db"))
+    monkeypatch.setattr(
+        "scripts.export_weekly_risk_rasters.main",
+        lambda argv: (_ for _ in ()).throw(
+            AssertionError("should not run Google export without user OAuth token")
+        ),
+    )
+
+    result = task_export_weekly_risk_rasters(
+        {
+            "stage": "1",
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-31",
+            "limit": 4,
+            "run": True,
+            "drive_folder": "EarthEngine",
+            "user_id": "missing-user",
+        }
+    )
+
+    assert result["returncode"] == 2
+    assert "OAuth token" in str(result["stderr"])
+
+
 def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> None:
     from modules.jobs.tasks import task_drive_download
 
@@ -68,7 +110,10 @@ def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> No
             self.name = name
             self.size = size
 
-    monkeypatch.setattr("modules.jobs.tasks.get_drive_service", lambda **_: object())
+    user_id = _store_drive_token(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "modules.jobs.tasks.build_drive_service_from_oauth_token", lambda token: object()
+    )
     monkeypatch.setattr(
         "modules.jobs.tasks.list_folder_files",
         lambda _svc, folder_id: [
@@ -89,7 +134,9 @@ def test_task_drive_download_returns_ingest_summary(monkeypatch, tmp_path) -> No
         },
     )
 
-    result = task_drive_download({"folder_id": "folder", "save_dir": str(tmp_path)})
+    result = task_drive_download(
+        {"folder_id": "folder", "save_dir": str(tmp_path), "user_id": user_id}
+    )
 
     assert result["single_tile_weeks_normalized"] == ["2021W01"]
     assert "downloaded" in result
@@ -115,8 +162,10 @@ def test_task_drive_download_supports_direct_file_ids(monkeypatch, tmp_path) -> 
         def files(self):
             return FakeFilesApi()
 
+    user_id = _store_drive_token(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "modules.jobs.tasks.get_drive_service", lambda **_: FakeService()
+        "modules.jobs.tasks.build_drive_service_from_oauth_token",
+        lambda token: FakeService(),
     )
     monkeypatch.setattr(
         "modules.jobs.tasks.download_file", lambda *args, **kwargs: None
@@ -132,15 +181,18 @@ def test_task_drive_download_supports_direct_file_ids(monkeypatch, tmp_path) -> 
         },
     )
 
-    result = task_drive_download({"file_ids": ["file-1"], "save_dir": str(tmp_path)})
+    result = task_drive_download(
+        {"file_ids": ["file-1"], "save_dir": str(tmp_path), "user_id": user_id}
+    )
 
     assert result["downloaded"] == 1
     assert result["single_tile_weeks_normalized"] == ["2021W02"]
 
 
-def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(
+def test_task_drive_download_uses_stored_token_for_clerk_user_id(
     monkeypatch, tmp_path
 ) -> None:
+    from modules.persistence.sqlite_store import SQLiteStore
     from modules.jobs.tasks import task_drive_download
 
     class FakeFilesApi:
@@ -160,15 +212,35 @@ def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(
         def files(self):
             return FakeFilesApi()
 
-    monkeypatch.setattr(
-        "modules.jobs.tasks.get_drive_service",
-        lambda **_: (_ for _ in ()).throw(
-            AssertionError("should not use token_json auth path")
-        ),
+    db_path = tmp_path / "app.db"
+    monkeypatch.setenv("APP_DB_PATH", str(db_path))
+    store = SQLiteStore(db_path)
+    target_user = store.get_or_create_user(
+        google_sub="google-sub-target",
+        email="target@example.com",
+        display_name="Target User",
+        clerk_user_id="user_clerk_target",
     )
+    other_user = store.get_or_create_user(
+        google_sub="google-sub-other",
+        email="other@example.com",
+        display_name="Other User",
+        clerk_user_id="user_clerk_other",
+    )
+    store.save_user_oauth_token(
+        user_id=target_user["id"],
+        token={"access_token": "target-token", "scope": "drive"},
+    )
+    store.save_user_oauth_token(
+        user_id=other_user["id"],
+        token={"access_token": "other-token", "scope": "drive"},
+    )
+
+    seen_token: dict[str, object] = {}
+
     monkeypatch.setattr(
         "modules.jobs.tasks.build_drive_service_from_oauth_token",
-        lambda token: FakeService(),
+        lambda token: seen_token.update(token) or FakeService(),
     )
     monkeypatch.setattr(
         "modules.jobs.tasks.download_file", lambda *args, **kwargs: None
@@ -188,15 +260,36 @@ def test_task_drive_download_uses_raw_oauth_token_without_authorized_user_file(
         {
             "file_ids": ["file-1"],
             "save_dir": str(tmp_path),
-            "oauth_token": {
-                "access_token": "abc",
-                "scope": "openid https://www.googleapis.com/auth/drive",
-            },
+            "user_id": "user_clerk_target",
         }
     )
 
     assert result["downloaded"] == 1
     assert result["single_tile_weeks_normalized"] == ["2021W03"]
+    assert seen_token["access_token"] == "target-token"
+
+
+def test_task_drive_download_ignores_client_supplied_oauth_token(
+    monkeypatch, tmp_path
+) -> None:
+    from modules.jobs.tasks import task_drive_download
+    monkeypatch.setattr(
+        "modules.jobs.tasks.build_drive_service_from_oauth_token",
+        lambda token: (_ for _ in ()).throw(
+            AssertionError("should not trust client-supplied OAuth token")
+        ),
+    )
+
+    result = task_drive_download(
+        {
+            "file_ids": ["file-1"],
+            "save_dir": str(tmp_path),
+            "oauth_token": {"access_token": "client-token"},
+        }
+    )
+
+    assert result["downloaded"] == 0
+    assert "OAuth token" in result["warnings"][0]
 
 
 def test_task_drive_download_sets_download_manifest_in_job_meta(
@@ -212,7 +305,10 @@ def test_task_drive_download_sets_download_manifest_in_job_meta(
 
     meta_calls: list[dict[str, object]] = []
 
-    monkeypatch.setattr("modules.jobs.tasks.get_drive_service", lambda **_: object())
+    user_id = _store_drive_token(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "modules.jobs.tasks.build_drive_service_from_oauth_token", lambda token: object()
+    )
     monkeypatch.setattr(
         "modules.jobs.tasks.list_folder_files",
         lambda _svc, folder_id: [
@@ -238,7 +334,9 @@ def test_task_drive_download_sets_download_manifest_in_job_meta(
         "modules.jobs.tasks._set_job_meta", lambda **fields: meta_calls.append(fields)
     )
 
-    task_drive_download({"folder_id": "folder", "save_dir": str(tmp_path)})
+    task_drive_download(
+        {"folder_id": "folder", "save_dir": str(tmp_path), "user_id": user_id}
+    )
 
     manifest_call = next(call for call in meta_calls if "download_items" in call)
     items = manifest_call["download_items"]
@@ -283,6 +381,7 @@ def test_task_drive_download_overwrites_existing_file_and_reports_counts(
             progress_callback(10)
         return 10
 
+    user_id = _store_drive_token(monkeypatch, tmp_path)
     monkeypatch.setattr(
         "modules.jobs.tasks.build_drive_service_from_oauth_token",
         lambda token: FakeService(),
@@ -303,11 +402,7 @@ def test_task_drive_download_overwrites_existing_file_and_reports_counts(
         {
             "file_ids": ["file-1"],
             "save_dir": str(tmp_path),
-            "oauth_token": {
-                "access_token": "abc",
-                "refresh_token": "ref",
-                "scope": "https://www.googleapis.com/auth/drive.readonly",
-            },
+            "user_id": user_id,
         }
     )
 

@@ -7,6 +7,7 @@ Usage:
 from __future__ import annotations
 
 import time
+import os
 
 import pytest
 
@@ -17,6 +18,11 @@ from selenium.webdriver.common.by import By
 
 BRAVE_BIN = "/usr/sbin/brave"
 BASE_URL = "http://127.0.0.1:5055"
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_E2E") != "1",
+    reason="requires RUN_E2E=1 and a live WebUI server",
+)
 
 
 @pytest.fixture(scope="module")

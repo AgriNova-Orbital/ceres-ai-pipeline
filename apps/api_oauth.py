@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, jsonify, redirect, request, session
+from flask import Blueprint, g, jsonify, redirect, request, session
 
 from modules.google_user_oauth import (
     DEFAULT_SCOPES,
@@ -68,6 +68,15 @@ def register_oauth_api(app, sqlite_store) -> None:
         )
         return oauth
 
+    def _current_clerk_user_id() -> str | None:
+        clerk_user = getattr(g, "clerk_user", None)
+        if isinstance(clerk_user, dict) and clerk_user.get("sub"):
+            return str(clerk_user["sub"])
+        return None
+
+    def _has_authenticated_user() -> bool:
+        return "user" in session or _current_clerk_user_id() is not None
+
     @api_oauth.get("/api/oauth/login")
     def oauth_login():
         oauth = _create_google_client()
@@ -104,12 +113,16 @@ def register_oauth_api(app, sqlite_store) -> None:
         if not google_sub:
             return redirect("/login?error=no_userinfo")
 
+        clerk_user_id = _current_clerk_user_id()
+
         # Store user in DB (for Drive access tracking)
         local_user = sqlite_store.get_or_create_user(
             google_sub=google_sub,
             email=email,
             display_name=str(display_name) if display_name else None,
+            clerk_user_id=clerk_user_id,
         )
+        session["user_id"] = local_user["id"]
 
         # Preserve refresh_token if Google doesn't resend it on re-auth
         existing_token = sqlite_store.get_user_oauth_token(local_user["id"])
@@ -146,7 +159,7 @@ def register_oauth_api(app, sqlite_store) -> None:
     @api_oauth.post("/api/oauth/upload-secret")
     def oauth_upload_secret():
         """Upload client_secret.json."""
-        if "user" not in session:
+        if not _has_authenticated_user():
             return jsonify(error="Not authenticated"), 401
 
         file = request.files.get("file")
@@ -171,7 +184,7 @@ def register_oauth_api(app, sqlite_store) -> None:
     @api_oauth.post("/api/oauth/disconnect")
     def oauth_disconnect():
         """Remove OAuth configuration."""
-        if "user" not in session:
+        if not _has_authenticated_user():
             return jsonify(error="Not authenticated"), 401
         sqlite_store.save_settings(
             initialized=True,

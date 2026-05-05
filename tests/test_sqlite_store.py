@@ -10,7 +10,7 @@ def test_sqlite_store_bootstraps_schema(tmp_path: Path):
     store.ensure_schema()
 
     settings = store.get_settings()
-    assert settings["initialized"] is False
+    assert settings["initialized"] is True
     assert settings["oauth_client_secret_path"] is None
     assert settings["redirect_base_url"] is None
 
@@ -81,7 +81,7 @@ def test_create_app_bootstraps_sqlite_store_from_app_db_path(
     app = create_app(repo_root=tmp_path)
 
     assert app.config["APP_DB_PATH"] == db_path
-    assert app.config["SQLITE_STORE"].get_settings()["initialized"] is False
+    assert app.config["SQLITE_STORE"].get_settings()["initialized"] is True
     assert db_path.exists()
 
 
@@ -115,3 +115,26 @@ def test_sqlite_store_persists_user_oauth_token(tmp_path: Path):
 
     store.delete_user_oauth_token(user_id=user["id"])
     assert store.get_user_oauth_token(user["id"]) is None
+
+
+def test_sqlite_store_maps_clerk_user_to_google_oauth_token(tmp_path: Path):
+    from modules.persistence.sqlite_store import SQLiteStore
+
+    store = SQLiteStore(tmp_path / "app.db")
+    store.ensure_schema()
+    user = store.get_or_create_user(
+        google_sub="google-sub-123",
+        email="user@example.com",
+        display_name="Demo User",
+        clerk_user_id="user_clerk_123",
+    )
+    token = {
+        "access_token": "access-123",
+        "refresh_token": "refresh-456",
+        "scope": "openid email profile",
+    }
+
+    store.save_user_oauth_token(user_id=user["id"], token=token)
+
+    assert store.get_user_by_clerk_user_id("user_clerk_123")["id"] == user["id"]
+    assert store.get_user_oauth_token_for_principal("user_clerk_123") == token

@@ -10,7 +10,7 @@ import pytest
 def _initialize_app(app, tmp_path: Path) -> None:
     secret = tmp_path / "client_secret.json"
     secret.write_text(
-        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/auth/callback"]}}',
+        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/api/oauth/callback"]}}',
         encoding="utf-8",
     )
     app.config["SQLITE_STORE"].save_settings(
@@ -274,6 +274,59 @@ def test_drive_download_accepts_json_payload(
     job_kwargs = kwargs["args"][0]
     assert job_kwargs["file_ids"] == ["file-1", "file-2"]
     assert job_kwargs["save_dir"] == "data/raw/drive_download"
+    assert job_kwargs["user_id"] == "uuid-user-123"
+
+
+def test_drive_list_uses_current_user_token_not_latest_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    discovery = pytest.importorskip("googleapiclient.discovery")
+    seen_token: dict[str, object] = {}
+
+    class FakeListRequest:
+        def execute(self):
+            return {"files": []}
+
+    class FakeFilesApi:
+        def list(self, **kwargs):
+            return FakeListRequest()
+
+    class FakeService:
+        def files(self):
+            return FakeFilesApi()
+
+    monkeypatch.setattr(
+        "modules.google_user_oauth.build_google_credentials_from_oauth_token",
+        lambda token: seen_token.update(token) or object(),
+    )
+    monkeypatch.setattr(discovery, "build", lambda *args, **kwargs: FakeService())
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+    store = app.config["SQLITE_STORE"]
+    other_user = store.get_or_create_user(
+        google_sub="google-sub-other",
+        email="other@example.com",
+        display_name="Other User",
+    )
+    store.save_user_oauth_token(
+        user_id=other_user["id"],
+        token={"access_token": "other-token", "refresh_token": "other-refresh"},
+    )
+    with store._connect() as conn:
+        conn.execute(
+            "UPDATE user_oauth_tokens SET updated_at = '2099-01-01T00:00:00+00:00' WHERE user_id = ?",
+            (other_user["id"],),
+        )
+
+    resp = client.get("/api/drive/list?id=root")
+
+    assert resp.status_code == 200
+    assert seen_token["access_token"] == "abc"
 
 
 def test_api_jobs_respects_limit_query(
@@ -376,6 +429,7 @@ def test_api_job_detail_returns_single_rq_job(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login(client, app)
 
     resp = client.get("/api/jobs/job-123")
 
@@ -401,6 +455,7 @@ def test_api_job_detail_returns_404_for_unknown_job(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login(client, app)
 
     resp = client.get("/api/jobs/missing-job")
 

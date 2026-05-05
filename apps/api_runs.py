@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, jsonify, request, session
 
 
 def register_runs_api(
@@ -22,7 +22,8 @@ def register_runs_api(
         clerk_user = getattr(g, "clerk_user", None)
         if isinstance(clerk_user, dict) and clerk_user.get("sub"):
             return str(clerk_user["sub"])
-        return None
+        user_id = session.get("user_id")
+        return str(user_id) if user_id else None
 
     def _job_info(j) -> dict:
         """Extract useful info from an RQ job."""

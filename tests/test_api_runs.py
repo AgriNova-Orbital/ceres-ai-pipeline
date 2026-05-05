@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 def _initialize_app(app, tmp_path: Path) -> None:
     secret = tmp_path / "client_secret.json"
     secret.write_text(
-        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/auth/callback"]}}',
+        '{"web":{"client_id":"cid","client_secret":"sec","redirect_uris":["http://127.0.0.1:5055/api/oauth/callback"]}}',
         encoding="utf-8",
     )
     app.config["SQLITE_STORE"].save_settings(
@@ -15,7 +15,14 @@ def _initialize_app(app, tmp_path: Path) -> None:
         oauth_client_secret_path=str(secret),
         redirect_base_url="http://127.0.0.1:5055",
     )
+    app.config["SQLITE_STORE"].set_admin("admin", "strong-test-password")
     app.config["APP_SETTINGS"] = app.config["SQLITE_STORE"].get_settings()
+
+
+def _login_legacy_user(client) -> None:
+    with client.session_transaction() as sess:
+        sess["user"] = {"username": "admin"}
+        sess["user_id"] = "uuid-user-123"
 
 
 def test_api_run_downloader_preview_uses_export_task(
@@ -32,6 +39,7 @@ def test_api_run_downloader_preview_uses_export_task(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login_legacy_user(client)
 
     resp = client.post(
         "/api/run/downloader",
@@ -51,6 +59,7 @@ def test_api_run_downloader_preview_uses_export_task(
     payload = kwargs["args"][0]
     assert payload["run"] is False
     assert payload["drive_folder"] is None
+    assert payload["user_id"] == "uuid-user-123"
 
 
 def test_api_run_downloader_run_export_requires_drive_folder(
@@ -64,6 +73,7 @@ def test_api_run_downloader_run_export_requires_drive_folder(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login_legacy_user(client)
 
     resp = client.post(
         "/api/run/downloader",
@@ -95,6 +105,7 @@ def test_api_run_downloader_refresh_inventory_uses_inventory_task(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login_legacy_user(client)
 
     resp = client.post(
         "/api/run/downloader",
@@ -123,6 +134,7 @@ def test_api_run_train_run_matrix_uses_task_run_matrix(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login_legacy_user(client)
 
     resp = client.post(
         "/api/run/train",
@@ -152,6 +164,7 @@ def test_api_run_train_execute_train_alias_maps_to_run_matrix(
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login_legacy_user(client)
 
     resp = client.post(
         "/api/run/train",
@@ -178,6 +191,7 @@ def test_api_run_eval_uses_task_run_eval(monkeypatch, tmp_path: Path) -> None:
     app = create_app(repo_root=tmp_path)
     _initialize_app(app, tmp_path)
     client = app.test_client()
+    _login_legacy_user(client)
 
     resp = client.post(
         "/api/run/eval",
