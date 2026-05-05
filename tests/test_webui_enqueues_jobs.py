@@ -27,6 +27,18 @@ def _login(client, app=None) -> None:
         sess["must_change_password"] = False
     if app is not None:
         store = app.config["SQLITE_STORE"]
+        with store._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (
+                    id, google_sub, email, display_name, created_at, last_login_at
+                ) VALUES (
+                    'uuid-user-123', 'google-sub-123', 'user@example.com',
+                    'Demo User', '2026-01-01T00:00:00+00:00',
+                    '2026-01-01T00:00:00+00:00'
+                )
+                """
+            )
         store.save_user_oauth_token(
             user_id="uuid-user-123",
             token={"access_token": "abc", "refresh_token": "def"},
