@@ -27,6 +27,7 @@ class SQLiteStore:
     def _connect(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -68,10 +69,11 @@ class SQLiteStore:
                     token_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
                 """
             )
+            self._ensure_oauth_tokens_cascade(conn)
             columns = {
                 row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()
             }
@@ -99,6 +101,64 @@ class SQLiteStore:
                         now,
                     ),
                 )
+
+    def _ensure_oauth_tokens_cascade(self, conn: sqlite3.Connection) -> None:
+        fk_rows = conn.execute("PRAGMA foreign_key_list(user_oauth_tokens)").fetchall()
+        has_cascade = any(
+            row["table"] == "users"
+            and row["from"] == "user_id"
+            and row["on_delete"].upper() == "CASCADE"
+            for row in fk_rows
+        )
+        if has_cascade:
+            return
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_oauth_tokens_orphaned (
+                user_id TEXT PRIMARY KEY,
+                token_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                backed_up_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO user_oauth_tokens_orphaned (
+                user_id, token_json, created_at, updated_at, backed_up_at
+            )
+            SELECT t.user_id, t.token_json, t.created_at, t.updated_at, ?
+            FROM user_oauth_tokens AS t
+            LEFT JOIN users AS u ON u.id = t.user_id
+            WHERE u.id IS NULL
+            """,
+            (_now_iso(),),
+        )
+        conn.execute("DROP TABLE IF EXISTS user_oauth_tokens_new")
+        conn.execute(
+            """
+            CREATE TABLE user_oauth_tokens_new (
+                user_id TEXT PRIMARY KEY,
+                token_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO user_oauth_tokens_new (
+                user_id, token_json, created_at, updated_at
+            )
+            SELECT t.user_id, t.token_json, t.created_at, t.updated_at
+            FROM user_oauth_tokens AS t
+            INNER JOIN users AS u ON u.id = t.user_id
+            """
+        )
+        conn.execute("DROP TABLE user_oauth_tokens")
+        conn.execute("ALTER TABLE user_oauth_tokens_new RENAME TO user_oauth_tokens")
 
     # ── Auth ─────────────────────────────────────────────
 

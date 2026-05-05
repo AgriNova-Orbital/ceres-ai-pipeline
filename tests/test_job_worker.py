@@ -14,6 +14,23 @@ def _store_drive_token(monkeypatch, tmp_path, user_id: str = "user-test") -> str
     db_path = tmp_path / "app.db"
     monkeypatch.setenv("APP_DB_PATH", str(db_path))
     store = SQLiteStore(db_path)
+    store.ensure_schema()
+    with store._connect() as conn:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO users (
+                id, google_sub, email, display_name, created_at, last_login_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                f"google-sub-{user_id}",
+                f"{user_id}@example.com",
+                "Test User",
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
     store.save_user_oauth_token(
         user_id=user_id,
         token={"access_token": f"token-{user_id}", "scope": "drive"},

@@ -29,6 +29,18 @@ def _login(client, app=None) -> None:
         sess["must_change_password"] = False
     if app is not None:
         store = app.config["SQLITE_STORE"]
+        with store._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (
+                    id, google_sub, email, display_name, created_at, last_login_at
+                ) VALUES (
+                    'uuid-user-123', 'google-sub-123', 'user@example.com',
+                    'Demo User', '2026-01-01T00:00:00+00:00',
+                    '2026-01-01T00:00:00+00:00'
+                )
+                """
+            )
         store.save_user_oauth_token(
             user_id="uuid-user-123",
             token={"access_token": "abc", "refresh_token": "def"},
@@ -411,11 +423,15 @@ def test_api_job_detail_returns_single_rq_job(
         id = "job-123"
         description = "downloader: refresh_inventory"
         meta = {"progress": 100, "step": "done"}
-        result = {"ok": True, "report": "reports/inventory.json"}
-        exc_info = None
         enqueued_at = None
         started_at = None
         ended_at = None
+
+        def return_value(self):
+            return {"ok": True, "report": "reports/inventory.json"}
+
+        def latest_result(self):
+            return None
 
         def get_status(self):
             return "finished"
@@ -439,6 +455,58 @@ def test_api_job_detail_returns_single_rq_job(
     assert payload["job"]["status"] == "finished"
     assert payload["job"]["meta"] == {"progress": 100, "step": "done"}
     assert payload["job"]["result"]["report"] == "reports/inventory.json"
+
+
+def test_api_job_detail_uses_modern_rq_result_accessors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    class FakeResult:
+        exc_string = "boom"
+
+    class FakeJob:
+        id = "job-123"
+        description = "downloader: refresh_inventory"
+        meta = {}
+        enqueued_at = None
+        started_at = None
+        ended_at = None
+
+        @property
+        def result(self):
+            raise AssertionError("deprecated result property should not be read")
+
+        @property
+        def exc_info(self):
+            raise AssertionError("deprecated exc_info property should not be read")
+
+        def return_value(self):
+            return {"ok": True, "report": "reports/inventory.json"}
+
+        def latest_result(self):
+            return FakeResult()
+
+        def get_status(self):
+            return "finished"
+
+    class FakeQueue:
+        def fetch_job(self, jid):
+            return FakeJob() if jid == "job-123" else None
+
+    monkeypatch.setattr("rq.Queue", lambda connection=None: FakeQueue())
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+
+    resp = client.get("/api/jobs/job-123")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["job"]["result"]["report"] == "reports/inventory.json"
+    assert payload["job"]["error"] == "boom"
 
 
 def test_api_job_detail_returns_404_for_unknown_job(

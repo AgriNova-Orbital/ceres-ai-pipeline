@@ -59,18 +59,21 @@ def register_runs_api(
         except Exception:
             info["meta"] = {}
         try:
-            if j.result is not None:
-                if isinstance(j.result, dict):
-                    info["result"] = {k: str(v)[:200] for k, v in j.result.items()}
-                elif isinstance(j.result, bytes):
-                    info["result"] = f"[binary {len(j.result)} bytes]"
+            result = j.return_value()
+            if result is not None:
+                if isinstance(result, dict):
+                    info["result"] = {k: str(v)[:200] for k, v in result.items()}
+                elif isinstance(result, bytes):
+                    info["result"] = f"[binary {len(result)} bytes]"
                 else:
-                    info["result"] = str(j.result)[:500]
+                    info["result"] = str(result)[:500]
         except Exception:
             info["result"] = "[unable to read result]"
         try:
-            if j.exc_info:
-                info["error"] = str(j.exc_info)[-500:]
+            latest_result = j.latest_result()
+            error = getattr(latest_result, "exc_string", None)
+            if error:
+                info["error"] = str(error)[-500:]
         except Exception:
             pass
         return info
