@@ -110,7 +110,42 @@ Expected: PASS.
 
 Run: `git add docker-compose.yml .env.example Dockerfile frontend/Dockerfile tests/test_version_management.py && git commit -m "feat(release): wire version into runtime metadata"`
 
-### Task 4: Final Verification
+### Task 4: Alpha/Beta/Release Rules
+
+**Files:**
+- Create: `docs/release-versioning.md`
+- Modify: `scripts/bump_version.py`
+- Modify: `tests/test_version_management.py`
+
+**Step 1: Write failing tests**
+
+Add tests requiring prerelease SemVer support for `X.Y.Z-alpha.N`, `X.Y.Z-beta.N`, and stable `X.Y.Z`; Python PEP 440 conversion; and documented release rules.
+
+**Step 2: Run failing tests**
+
+Run: `uv run --dev python -m pytest tests/test_version_management.py -q`
+
+Expected: FAIL because prerelease versions and rules docs are not supported yet.
+
+**Step 3: Implement stage handling**
+
+Update `scripts/bump_version.py` so `alpha`, `beta`, and `release` targets promote versions through the release lifecycle and convert Python package metadata to PEP 440.
+
+**Step 4: Document rules**
+
+Create `docs/release-versioning.md` with the alpha, beta, and release rules plus bump commands.
+
+**Step 5: Verify**
+
+Run: `uv run --dev python -m pytest tests/test_version_management.py -q`
+
+Expected: PASS.
+
+**Step 6: Commit**
+
+Run: `git add docs/release-versioning.md docs/plans/2026-05-07-version-management.md scripts/bump_version.py tests/test_version_management.py && git commit -m "feat(release): support alpha beta release channels"`
+
+### Task 5: Final Verification
 
 **Files:**
 - No edits unless verification reveals a defect.
