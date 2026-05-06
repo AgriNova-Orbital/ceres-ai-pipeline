@@ -30,3 +30,44 @@ def test_python_and_frontend_versions_match_version_file() -> None:
     assert package["version"] == version
     assert lock["version"] == version
     assert lock["packages"][""]["version"] == version
+
+
+def test_bump_version_supports_semver_parts_and_explicit_versions() -> None:
+    from scripts.bump_version import bump_version
+
+    assert bump_version("1.2.3", "patch") == "1.2.4"
+    assert bump_version("1.2.3", "minor") == "1.3.0"
+    assert bump_version("1.2.3", "major") == "2.0.0"
+    assert bump_version("1.2.3", "1.4.0") == "1.4.0"
+
+
+def test_replace_version_in_files_updates_project_metadata(tmp_path: Path) -> None:
+    from scripts.bump_version import replace_version_in_files
+
+    (tmp_path / "frontend").mkdir()
+    (tmp_path / "VERSION").write_text("1.2.3\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    (tmp_path / "uv.lock").write_text(
+        '[[package]]\nname = "demo"\nversion = "1.2.3"\n', encoding="utf-8"
+    )
+    (tmp_path / "frontend" / "package.json").write_text(
+        json.dumps({"name": "demo-frontend", "version": "1.2.3"}) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "frontend" / "package-lock.json").write_text(
+        json.dumps({"name": "demo-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
+        encoding="utf-8",
+    )
+
+    replace_version_in_files(tmp_path, "1.3.0")
+
+    assert (tmp_path / "VERSION").read_text(encoding="utf-8") == "1.3.0\n"
+    assert 'version = "1.3.0"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'version = "1.3.0"' in (tmp_path / "uv.lock").read_text(encoding="utf-8")
+    package = json.loads((tmp_path / "frontend" / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((tmp_path / "frontend" / "package-lock.json").read_text(encoding="utf-8"))
+    assert package["version"] == "1.3.0"
+    assert lock["version"] == "1.3.0"
+    assert lock["packages"][""]["version"] == "1.3.0"
