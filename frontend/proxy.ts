@@ -9,7 +9,6 @@ const isPublicRoute = createRouteMatcher([
   "/terms",
   "/favicon.ico",
   "/logo(.*)",
-  "/api/auth(.*)",
   "/api/oauth/callback(.*)",
   "/auth(.*)",
 ]);
@@ -21,7 +20,14 @@ export default clerkMiddleware(async (auth, request) => {
     return NextResponse.next();
   }
 
-  const authState = await auth.protect();
+  const authState = await auth();
+  if (!authState.userId) {
+    if (isApiRoute(request)) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    return authState.redirectToSignIn();
+  }
+
   if (isApiRoute(request)) {
     const token = await authState.getToken();
     if (token) {
@@ -29,6 +35,7 @@ export default clerkMiddleware(async (auth, request) => {
       requestHeaders.set("Authorization", `Bearer ${token}`);
       return NextResponse.next({ request: { headers: requestHeaders } });
     }
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   return NextResponse.next();

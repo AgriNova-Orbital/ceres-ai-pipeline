@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
+import { readApiResponse } from "@/lib/api-response";
 
 interface JobRecord {
   id: string;
@@ -15,6 +16,7 @@ interface JobRecord {
 export default function JobPanel() {
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
   const inFlightRef = useRef(false);
 
   async function loadJobs() {
@@ -22,10 +24,15 @@ export default function JobPanel() {
     inFlightRef.current = true;
     try {
       const res = await fetch("/api/jobs", { cache: "no-store" });
-      const data = await res.json();
-      setJobs(data.history || []);
+      const response = await readApiResponse(res, "Failed to load jobs");
+      if (!response.ok) {
+        setError(response.error);
+        return;
+      }
+      setError("");
+      setJobs((response.data.history as JobRecord[] | undefined) || []);
     } catch {
-      /* ignore */
+      setError("Connection error");
     } finally {
       inFlightRef.current = false;
     }
@@ -70,7 +77,9 @@ export default function JobPanel() {
               </Link>
             </div>
           </div>
-          {jobs.length === 0 ? (
+          {error ? (
+            <div className="p-4 text-center text-sm text-red-600 dark:text-red-300">{error}</div>
+          ) : jobs.length === 0 ? (
             <div className="p-4 text-center">
               <p className="text-sm text-stone-400">No jobs yet</p>
               <Link href="/dashboard" className="text-xs text-emerald-700 hover:underline dark:text-emerald-400">

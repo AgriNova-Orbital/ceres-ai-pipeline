@@ -43,6 +43,32 @@ def test_api_run_requires_clerk_bearer_when_clerk_auth_is_enabled(
     assert resp.get_json()["error"] == "Not authenticated"
 
 
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/api/auth/login"),
+        ("post", "/api/auth/register"),
+        ("post", "/api/auth/change-password"),
+        ("get", "/api/auth/me"),
+        ("get", "/api/auth/status"),
+    ],
+)
+def test_legacy_password_auth_api_is_disabled_when_clerk_auth_is_enabled(
+    monkeypatch, tmp_path: Path, method: str, path: str
+):
+    _enable_clerk(monkeypatch)
+
+    from apps.wheat_risk_webui import create_app
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+
+    resp = getattr(client, method)(path, json={})
+
+    assert resp.status_code == 410
+    assert resp.get_json()["error"] == "Legacy password auth is disabled"
+
+
 def test_api_run_uses_verified_clerk_subject_as_job_user_id(
     monkeypatch, tmp_path: Path
 ):

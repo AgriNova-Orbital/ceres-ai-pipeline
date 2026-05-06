@@ -7,6 +7,15 @@ from flask import Blueprint, jsonify, request, session
 
 def register_auth_api(app, sqlite_store) -> None:
     api_auth = Blueprint("api_auth", __name__)
+
+    @api_auth.before_request
+    def block_legacy_password_auth_when_clerk_is_enabled():
+        from modules import clerk_auth
+
+        if clerk_auth.is_clerk_auth_enabled():
+            return jsonify(error="Legacy password auth is disabled"), 410
+        return None
+
     @api_auth.post("/api/auth/login")
     def api_login():
         data = request.get_json(silent=True) or {}

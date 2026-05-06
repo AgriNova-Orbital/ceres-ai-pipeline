@@ -5,6 +5,7 @@ import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import StatusBadge from "@/components/StatusBadge";
 import { formatTime, formatBytes, formatSpeed, formatEta } from "@/lib/utils";
+import { readApiResponse } from "@/lib/api-response";
 
 interface Job {
   id: string;
@@ -56,6 +57,7 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState("500");
   const [totalJobs, setTotalJobs] = useState(0);
+  const [error, setError] = useState("");
   const inFlightRef = useRef(false);
 
   async function load() {
@@ -64,12 +66,17 @@ export default function JobsPage() {
     try {
       const query = limit === "all" ? "/api/jobs?all=1" : `/api/jobs?limit=${limit}`;
       const res = await fetch(query, { cache: "no-store" });
-      const data = await res.json();
-      setJobs(data.jobs || []);
-      setWorkers(data.workers || []);
-      setTotalJobs(Number(data.total || 0));
+      const response = await readApiResponse(res, "Failed to load jobs");
+      if (!response.ok) {
+        setError(response.error);
+        return;
+      }
+      setError("");
+      setJobs((response.data.jobs as Job[] | undefined) || []);
+      setWorkers((response.data.workers as Worker[] | undefined) || []);
+      setTotalJobs(Number(response.data.total || 0));
     } catch {
-      /* ignore */
+      setError("Connection error");
     } finally {
       setLoading(false);
       inFlightRef.current = false;
@@ -159,6 +166,8 @@ export default function JobsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
+        {error && <div className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
+
         <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
           <h2 className="text-sm font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide mb-3">Workers</h2>
           {workers.length === 0 ? (

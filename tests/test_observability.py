@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -34,7 +35,89 @@ def test_init_sentry_configures_sdk_when_dsn_is_present(monkeypatch):
     assert kwargs["traces_sample_rate"] == 0.25
     assert kwargs["server_name"] == "ceres-worker"
     integration_names = {type(x).__name__ for x in kwargs["integrations"]}
-    assert integration_names == {"FlaskIntegration", "RqIntegration"}
+    assert integration_names == {"FlaskIntegration", "RqIntegration", "LoggingIntegration"}
+    assert kwargs["enable_logs"] is True
+
+
+def test_init_sentry_configures_python_logging_levels(monkeypatch):
+    import sentry_sdk
+
+    from modules.observability import init_sentry
+
+    basic_config = Mock()
+    monkeypatch.setattr(logging, "basicConfig", basic_config)
+    monkeypatch.setattr(sentry_sdk, "init", Mock())
+    monkeypatch.setenv("SENTRY_DSN", "https://example@sentry.invalid/1")
+    monkeypatch.setenv("APP_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SENTRY_LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("SENTRY_BREADCRUMB_LEVEL", "DEBUG")
+    monkeypatch.setenv("SENTRY_EVENT_LEVEL", "WARNING")
+
+    assert init_sentry("web") is True
+
+    basic_config.assert_called_once()
+    assert basic_config.call_args.kwargs["level"] == logging.DEBUG
+    assert basic_config.call_args.kwargs["force"] is False
+    kwargs = sentry_sdk.init.call_args.kwargs
+    logging_integration = next(
+        item for item in kwargs["integrations"] if type(item).__name__ == "LoggingIntegration"
+    )
+    assert logging_integration._sentry_logs_handler.level == logging.DEBUG
+    assert logging_integration._breadcrumb_handler.level == logging.DEBUG
+    assert logging_integration._handler.level == logging.WARNING
+
+
+def test_sentry_payload_scrubber_redacts_sensitive_fields():
+    from modules.observability import scrub_sentry_payload
+
+    event = {
+        "request": {
+            "headers": {
+                "Authorization": "Bearer token-123",
+                "Cookie": "session=secret",
+                "X-Request-ID": "req-1",
+            }
+        },
+        "extra": {
+            "refresh_token": "refresh-123",
+            "nested": [{"client_secret": "google-secret"}],
+        },
+    }
+
+    scrubbed = scrub_sentry_payload(event)
+
+    assert scrubbed["request"]["headers"]["Authorization"] == "[Filtered]"
+    assert scrubbed["request"]["headers"]["Cookie"] == "[Filtered]"
+    assert scrubbed["request"]["headers"]["X-Request-ID"] == "req-1"
+    assert scrubbed["extra"]["refresh_token"] == "[Filtered]"
+    assert scrubbed["extra"]["nested"][0]["client_secret"] == "[Filtered]"
+
+
+def test_sentry_payload_scrubber_redacts_sensitive_strings():
+    from modules.observability import scrub_sentry_payload
+
+    assert (
+        scrub_sentry_payload("Authorization: Bearer token-123")
+        == "Authorization: Bearer [Filtered]"
+    )
+    assert scrub_sentry_payload("refresh_token=refresh-123") == "refresh_token=[Filtered]"
+    assert scrub_sentry_payload("client_secret: google-secret") == "client_secret: [Filtered]"
+    assert scrub_sentry_payload("SENTRY_DSN=https://abc@sentry.invalid/1") == "SENTRY_DSN=[Filtered]"
+
+
+def test_init_sentry_registers_event_and_log_scrubbers(monkeypatch):
+    import sentry_sdk
+
+    from modules.observability import init_sentry, scrub_sentry_log, scrub_sentry_payload
+
+    monkeypatch.setattr(sentry_sdk, "init", Mock())
+    monkeypatch.setenv("SENTRY_DSN", "https://example@sentry.invalid/1")
+
+    assert init_sentry("web") is True
+
+    kwargs = sentry_sdk.init.call_args.kwargs
+    assert kwargs["before_send"] is scrub_sentry_payload
+    assert kwargs["before_send_log"] is scrub_sentry_log
 
 
 def test_init_sentry_ignores_out_of_range_sample_rates(monkeypatch):

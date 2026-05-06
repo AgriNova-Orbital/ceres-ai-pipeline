@@ -5,6 +5,7 @@ import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import { summarizeWeekRange } from "@/lib/week-range";
 import { formatBytes, formatSpeed, formatEta } from "@/lib/utils";
+import { readApiResponse } from "@/lib/api-response";
 
 interface DriveFile {
   id: string;
@@ -64,10 +65,20 @@ export default function DrivePage() {
   async function checkStatus() {
     try {
       const res = await fetch("/api/oauth/status");
-      const data = await res.json();
-      setConfigured(data.configured);
-      if (data.configured) listFolder("root", "My Drive");
-    } catch { setConfigured(false); }
+      const response = await readApiResponse(res, "Failed to load Google Drive status");
+      if (!response.ok) {
+        setError(response.error);
+        setConfigured(false);
+        return;
+      }
+      const isConfigured = Boolean(response.data.configured);
+      setError("");
+      setConfigured(isConfigured);
+      if (isConfigured) listFolder("root", "My Drive");
+    } catch {
+      setError("Connection error");
+      setConfigured(false);
+    }
   }
 
   async function listFolder(id: string, name?: string) {
@@ -75,18 +86,19 @@ export default function DrivePage() {
     setFolderId(id);
     try {
       const res = await fetch(`/api/drive/list?id=${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        const allItems = [...(data.folders || []), ...(data.files || [])];
+      const response = await readApiResponse(res, "Failed to load Google Drive folder");
+      if (response.ok) {
+        const folders = (response.data.folders as DriveFile[] | undefined) || [];
+        const driveFiles = (response.data.files as DriveFile[] | undefined) || [];
+        const allItems = [...folders, ...driveFiles];
         setFiles(allItems);
-        setTotalCount(data.total || allItems.length);
-        setFolderCount(data.folder_count || (data.folders || []).length);
-        setFileCount(data.file_count || (data.files || []).length);
+        setTotalCount(Number(response.data.total || allItems.length));
+        setFolderCount(Number(response.data.folder_count || folders.length));
+        setFileCount(Number(response.data.file_count || driveFiles.length));
         setError("");
         setSelected(new Set());
       } else {
-        const data = await res.json();
-        setError(data.error || "Failed");
+        setError(response.error);
       }
     } catch { setError("Connection error"); }
     setLoading(false);
@@ -119,10 +131,15 @@ export default function DrivePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ file_ids: [item.id], save_dir: `data/raw/drive_download` }),
         });
-        const data = await res.json();
-        if (data.job_id) {
-          setDownloads((prev) => prev.map((d) => d.id === item.id ? { ...d, jobId: data.job_id, status: "submitted" } : d));
-          addLog(`Queued: ${item.name} (job: ${data.job_id.slice(0, 8)})`);
+        const response = await readApiResponse(res, "Failed to start download");
+        const jobId = response.ok && typeof response.data.job_id === "string" ? response.data.job_id : null;
+        if (jobId) {
+          setDownloads((prev) => prev.map((d) => d.id === item.id ? { ...d, jobId, status: "submitted" } : d));
+          addLog(`Queued: ${item.name} (job: ${jobId.slice(0, 8)})`);
+        } else {
+          const message = response.ok ? "missing job id" : response.error;
+          setDownloads((prev) => prev.map((d) => d.id === item.id ? { ...d, status: "error", message } : d));
+          addLog(`Error: ${item.name}: ${message}`);
         }
       } catch {
         setDownloads((prev) => prev.map((d) => d.id === item.id ? { ...d, status: "error", message: "submit failed" } : d));
@@ -139,8 +156,12 @@ export default function DrivePage() {
       jobsPollInFlightRef.current = true;
       try {
         const res = await fetch("/api/jobs", { cache: "no-store" });
-        const data = await res.json();
-        const jobs = data.jobs || [];
+        const response = await readApiResponse(res, "Failed to refresh jobs");
+        if (!response.ok) {
+          addLog(response.error);
+          return;
+        }
+        const jobs = (response.data.jobs as { id: string; status: string; meta?: Record<string, unknown> }[] | undefined) || [];
         setDownloads((prev) =>
           prev.map((d) => {
             if (!d.jobId) return d;
@@ -240,7 +261,9 @@ export default function DrivePage() {
                 form.append("file", uploadFile);
                 form.append("redirect_base_url", typeof window !== "undefined" ? window.location.origin : "");
                 const res = await fetch("/api/oauth/upload-secret", { method: "POST", body: form });
-                if (res.ok) { setConfigured(true); addLog("OAuth configured"); listFolder("root"); }
+                const response = await readApiResponse(res, "Failed to upload OAuth client secret");
+                if (response.ok) { setConfigured(true); setError(""); addLog("OAuth configured"); listFolder("root"); }
+                else setError(response.error);
               }} className="flex gap-2 items-end">
                 <label className="flex-1">
                   <input type="file" accept=".json" onChange={(e) => setUploadFile(e.target.files?.[0] || null)}

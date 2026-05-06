@@ -140,6 +140,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.bak
 .envrc
 .venv
 env/
@@ -154,6 +155,7 @@ venv.bak/
 .spyproject
 
 # Local data/artifacts
+.tmp/
 state/
 data/
 !frontend/app/data/

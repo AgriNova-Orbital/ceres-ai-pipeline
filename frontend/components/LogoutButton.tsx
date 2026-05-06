@@ -1,17 +1,28 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 import { useState } from "react";
 
 export default function LogoutButton() {
-  const router = useRouter();
+  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    return null;
+  }
+
+  return <ClerkLogoutButton />;
+}
+
+function ClerkLogoutButton() {
+  const { signOut } = useClerk();
   const [loading, setLoading] = useState(false);
 
   async function handleLogout() {
+    if (loading) return;
     setLoading(true);
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    try {
+      await signOut({ redirectUrl: "/login" });
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

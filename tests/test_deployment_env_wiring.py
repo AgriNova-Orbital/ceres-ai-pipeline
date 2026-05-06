@@ -42,7 +42,50 @@ def test_frontend_dockerfile_only_bakes_public_clerk_key() -> None:
     assert "ARG CLERK_SECRET_KEY" not in dockerfile
 
 
+def test_frontend_dockerfile_copies_public_assets_for_standalone_runtime() -> None:
+    dockerfile = (ROOT / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "COPY --from=builder --chown=nextjs:nodejs /app/public ./public" in dockerfile
+
+
+def test_root_dockerignore_excludes_frontend_build_artifacts() -> None:
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+
+    assert "frontend/node_modules/" in dockerignore
+    assert "frontend/.next/" in dockerignore
+
+
 def test_env_example_documents_clerk_jwks_cache_ttl() -> None:
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
     assert "CLERK_JWKS_CACHE_TTL_SECONDS=300" in env_example
+
+
+def test_compose_enables_sentry_logs_for_docker_services() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    for profile in ("dev", "beta", "release"):
+        for service_prefix in ("web", "worker"):
+            service = _service_block(compose, f"{service_prefix}-{profile}")
+            assert "SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}" in service
+            assert "SENTRY_LOG_LEVEL=${SENTRY_LOG_LEVEL:-" in service
+            assert "SENTRY_BREADCRUMB_LEVEL=${SENTRY_BREADCRUMB_LEVEL:-" in service
+            assert "SENTRY_EVENT_LEVEL=${SENTRY_EVENT_LEVEL:-ERROR}" in service
+            assert "APP_LOG_LEVEL=${APP_LOG_LEVEL:-" in service
+
+        frontend = _service_block(compose, f"frontend-{profile}")
+        assert "SENTRY_DSN=${SENTRY_DSN:-}" in frontend
+        assert "SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}" in frontend
+        assert "NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}" in frontend
+        assert "NEXT_PUBLIC_SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-" in frontend
+        assert "NEXT_PUBLIC_SENTRY_RELEASE=${SENTRY_RELEASE:-local}" in frontend
+
+
+def test_env_example_documents_sentry_log_controls() -> None:
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+    assert "SENTRY_ENABLE_LOGS=true" in env_example
+    assert "SENTRY_LOG_LEVEL=INFO" in env_example
+    assert "SENTRY_BREADCRUMB_LEVEL=INFO" in env_example
+    assert "SENTRY_EVENT_LEVEL=ERROR" in env_example
+    assert "APP_LOG_LEVEL=INFO" in env_example

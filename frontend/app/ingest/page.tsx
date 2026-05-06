@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PageLayout from "@/components/PageLayout";
+import { readApiResponse } from "@/lib/api-response";
 
 interface DatasetStatus {
   path: string;
@@ -26,12 +27,17 @@ export default function IngestPage() {
     setScanError("");
     try {
       const res = await fetch("/api/ingest/status");
-      const data = await res.json();
-      setDatasets(data.datasets || {});
+      const response = await readApiResponse(res, "Failed to load dataset status");
+      if (!response.ok) {
+        setScanError(response.error);
+        return;
+      }
+      setDatasets((response.data.datasets as Record<string, DatasetStatus> | undefined) || {});
     } catch {
       setScanError("Failed to load dataset status. Please check the server connection.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -53,15 +59,16 @@ export default function IngestPage() {
           raw_dir: `data/raw/${name}`,
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      const response = await readApiResponse(res, "Failed to submit ingest job");
+      const jobId = response.ok && typeof response.data.job_id === "string" ? response.data.job_id : null;
+      if (jobId) {
         setResults((p) => ({
           ...p,
           [name]: {
             merged: 0,
             normalized: 0,
             failed: 0,
-            logs: [`Job queued: ${data.job_id}`, "Monitor progress on the Jobs page."],
+            logs: [`Job queued: ${jobId}`, "Monitor progress on the Jobs page."],
           },
         }));
       } else {
@@ -71,7 +78,7 @@ export default function IngestPage() {
             merged: 0,
             normalized: 0,
             failed: 1,
-            logs: [`Error: ${data.error || "Unknown error"}`],
+            logs: [`Error: ${response.ok ? "Missing job id" : response.error}`],
           },
         }));
       }

@@ -1,10 +1,14 @@
 import os
 import sys
+import logging
 
 from redis import Redis
 from rq import Queue, Worker
 
 from modules.observability import init_sentry
+
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -16,12 +20,12 @@ def main() -> None:
     )
 
     if os.environ.get("USE_FAKEREDIS") == "1":
-        print("Worker: Using FakeRedis for local testing.")
+        logger.info("Worker using FakeRedis for local testing")
         from fakeredis import FakeStrictRedis
 
         conn = FakeStrictRedis()
     else:
-        print(f"Worker: Connecting to Redis at {redis_url}")
+        logger.info("Worker connecting to Redis")
         conn = Redis.from_url(redis_url)
 
     queues = [Queue(name, connection=conn) for name in listen]

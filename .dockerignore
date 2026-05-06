@@ -10,6 +10,7 @@ __pycache__/
 
 # Environment
 .env
+.env.bak
 .env.example
 .venv
 venv/
@@ -26,8 +27,17 @@ ENV/
 .coverage
 htmlcov/
 
+# Frontend local build artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
 # Data and logs
 data/
+state/
+runs/
+reports/
+backups/
 logs/
 *.log
 
@@ -41,5 +51,7 @@ Dockerfile
 .dockerignore
 
 # Temporary files
+.tmp/
+.worktrees/
 *.tmp
 .DS_Store

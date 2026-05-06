@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LogoutButton from "@/components/LogoutButton";
+import { readApiResponse } from "@/lib/api-response";
 
 interface SystemInfo {
   cpu_count: number;
@@ -61,13 +63,23 @@ export default function AdminDashboard() {
         fetch("/api/admin/data"),
         fetch("/api/admin/database"),
       ]);
-      setSystem(await sysRes.json());
-      const wkData = await wkRes.json();
-      setWorkers(wkData.workers || []);
-      setQueue(await qRes.json());
-      setRedis(await rdRes.json());
-      setData(await dtRes.json());
-      setDb(await dbRes.json());
+      const [sys, wk, q, rd, dt, database] = await Promise.all(
+        [sysRes, wkRes, qRes, rdRes, dtRes, dbRes].map((res) =>
+          readApiResponse(res, "Failed to load system info")
+        )
+      );
+      const failed = [sys, wk, q, rd, dt, database].find((result) => !result.ok);
+      if (failed && !failed.ok) {
+        setError(failed.error);
+        return;
+      }
+      setError("");
+      setSystem(sys.data as unknown as SystemInfo);
+      setWorkers((wk.data.workers as WorkerInfo[] | undefined) || []);
+      setQueue(q.data as unknown as QueueInfo);
+      setRedis(rd.data as unknown as RedisInfo);
+      setData(dt.data as unknown as DataInfo);
+      setDb(database.data as unknown as DatabaseInfo);
     } catch {
       setError("Failed to load system info");
     }
@@ -88,7 +100,7 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <button onClick={loadAll} className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100 dark:border-stone-600 dark:hover:bg-stone-800">Refresh</button>
-          <LogoutBtn />
+          <LogoutButton />
         </div>
       </header>
 
@@ -220,17 +232,5 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span className="text-stone-500 dark:text-stone-400">{label}: </span>
       <span className="font-medium">{value}</span>
     </div>
-  );
-}
-
-function LogoutBtn() {
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
-  }
-  return (
-    <button onClick={logout} className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100 dark:border-stone-600 dark:hover:bg-stone-800">
-      Logout
-    </button>
   );
 }

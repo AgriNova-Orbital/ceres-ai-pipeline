@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import { summarizeWeekRange } from "@/lib/week-range";
+import { readApiResponse } from "@/lib/api-response";
 
 interface FileInfo {
   path: string;
@@ -28,9 +29,11 @@ export default function DataPage() {
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [onlyRange, setOnlyRange] = useState(false);
+  const [error, setError] = useState("");
 
   async function load() {
     setLoading(true);
+    setError("");
     try {
       const [r1, r2, r3, r4] = await Promise.all([
         fetch("/api/scan/raw?limit=500"),
@@ -38,12 +41,23 @@ export default function DataPage() {
         fetch("/api/scan/reports"),
         fetch("/api/scan/runs"),
       ]);
-      setRawFiles((await r1.json()).files || []);
-      setPatches((await r2.json()).files || []);
-      setReports((await r3.json()).files || []);
-      setRuns((await r4.json()).runs || []);
-    } catch { /* ignore */ }
-    setLoading(false);
+      const [raw, patch, report, run] = await Promise.all(
+        [r1, r2, r3, r4].map((res) => readApiResponse(res, "Failed to scan data files"))
+      );
+      const failed = [raw, patch, report, run].find((result) => !result.ok);
+      if (failed && !failed.ok) {
+        setError(failed.error);
+        return;
+      }
+      setRawFiles((raw.data.files as FileInfo[] | undefined) || []);
+      setPatches((patch.data.files as FileInfo[] | undefined) || []);
+      setReports((report.data.files as FileInfo[] | undefined) || []);
+      setRuns((run.data.runs as RunEntry[] | undefined) || []);
+    } catch {
+      setError("Connection error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);
@@ -77,6 +91,8 @@ export default function DataPage() {
       </header>
 
       <main className="max-w-7xl mx-auto p-6 space-y-6">
+        {error && <div className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
         {/* Summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Raw GeoTIFFs" value={rawFiles.length} unit={`(${totalSize[0].toFixed(0)} MB)`} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { readApiResponse } from "@/lib/api-response";
 
 interface UseApiSubmitOptions {
   onSuccess?: (data: Record<string, unknown>) => void;
@@ -47,18 +48,18 @@ export function useApiSubmit(
             : { "Content-Type": "application/json" },
           body: isFormData ? body : JSON.stringify(body),
         });
-        const data = await res.json();
+        const response = await readApiResponse(res, "Request failed");
 
-        if (res.ok) {
-          const id = data.job_id || null;
+        if (response.ok) {
+          const id = typeof response.data.job_id === "string" ? response.data.job_id : null;
           setJobId(id);
           setResult(
             options?.successMessage ||
               (id ? `Job queued: ${id}` : "Operation completed")
           );
-          options?.onSuccess?.(data);
+          options?.onSuccess?.(response.data);
         } else {
-          setError(data.error || "Request failed");
+          setError(response.error);
         }
       } catch {
         setError("Connection error. Please check if the server is running.");

@@ -5,6 +5,7 @@ import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { readApiResponse } from "@/lib/api-response";
 
 export default function SettingsPage() {
   const [oauthConfigured, setOauthConfigured] = useState<boolean | null>(null);
@@ -17,10 +18,23 @@ export default function SettingsPage() {
   async function checkStatus() {
     try {
       const res = await fetch("/api/oauth/status");
-      const data = await res.json();
-      setOauthConfigured(data.configured);
-      setRedirectBase(data.redirect_base || (typeof window !== "undefined" ? window.location.origin : ""));
+      const response = await readApiResponse(res, "Failed to load Google Drive status");
+      if (!response.ok) {
+        setError(response.error);
+        setOauthConfigured(false);
+        return;
+      }
+      setError("");
+      setOauthConfigured(Boolean(response.data.configured));
+      setRedirectBase(
+        typeof response.data.redirect_base === "string"
+          ? response.data.redirect_base
+          : typeof window !== "undefined"
+            ? window.location.origin
+            : ""
+      );
     } catch {
+      setError("Connection error");
       setOauthConfigured(false);
     }
   }
@@ -38,13 +52,13 @@ export default function SettingsPage() {
       form.append("file", uploadFile);
       form.append("redirect_base_url", redirectBase);
       const res = await fetch("/api/oauth/upload-secret", { method: "POST", body: form });
-      const data = await res.json();
-      if (res.ok) {
+      const response = await readApiResponse(res, "Upload failed");
+      if (response.ok) {
         setMessage("client_secret.json uploaded! You can now connect to Google Drive.");
         setOauthConfigured(true);
         setUploadFile(null);
       } else {
-        setError(data.error || "Upload failed");
+        setError(response.error);
       }
     } catch {
       setError("Connection error");
@@ -54,7 +68,13 @@ export default function SettingsPage() {
 
   async function handleDisconnect() {
     if (!confirm("Remove Google Drive connection?")) return;
-    await fetch("/api/oauth/disconnect", { method: "POST" });
+    setError("");
+    const res = await fetch("/api/oauth/disconnect", { method: "POST" });
+    const response = await readApiResponse(res, "Failed to disconnect Google Drive");
+    if (!response.ok) {
+      setError(response.error);
+      return;
+    }
     setOauthConfigured(false);
     setMessage("Google Drive disconnected");
   }

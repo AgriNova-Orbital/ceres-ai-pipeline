@@ -5,6 +5,7 @@ import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import FeedbackMessage from "@/components/FeedbackMessage";
 import SubmitButton from "@/components/SubmitButton";
+import { readApiResponse } from "@/lib/api-response";
 
 interface MatrixCell {
   level: number;
@@ -66,10 +67,14 @@ export default function TrainingPage() {
       jobsInFlightRef.current = true;
       try {
         const res = await fetch("/api/jobs", { cache: "no-store" });
-        const data = await res.json();
-        setJobs(data.jobs || []);
+        const response = await readApiResponse(res, "Failed to load jobs");
+        if (!response.ok) {
+          setError(response.error);
+          return;
+        }
+        setJobs((response.data.jobs as JobInfo[] | undefined) || []);
       } catch {
-        /* ignore */
+        setError("Connection error");
       } finally {
         jobsInFlightRef.current = false;
       }
@@ -127,12 +132,13 @@ export default function TrainingPage() {
           lr: Number(lr),
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setResult(`Job queued: ${data.job_id}`);
-        setMatrixCells((prev) => prev.map((c) => ({ ...c, status: "queued", jobId: data.job_id })));
+      const response = await readApiResponse(res, "Failed to submit training job");
+      const jobId = response.ok && typeof response.data.job_id === "string" ? response.data.job_id : null;
+      if (jobId) {
+        setResult(`Job queued: ${jobId}`);
+        setMatrixCells((prev) => prev.map((c) => ({ ...c, status: "queued", jobId })));
       } else {
-        setError(data.error || "Failed to submit training job");
+        setError(response.ok ? "Training job did not return a job id" : response.error);
       }
     } catch {
       setError("Connection error. Please check if the server is running.");
@@ -154,18 +160,19 @@ export default function TrainingPage() {
           dry_run: false,
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      const response = await readApiResponse(res, "Failed to retry");
+      const jobId = response.ok && typeof response.data.job_id === "string" ? response.data.job_id : null;
+      if (jobId) {
         setMatrixCells((prev) =>
           prev.map((c) =>
             c.level === cell.level && c.steps === cell.steps
-              ? { ...c, status: "queued", jobId: data.job_id, error: undefined }
+              ? { ...c, status: "queued", jobId, error: undefined }
               : c
           )
         );
-        setResult(`Retry queued: ${data.job_id}`);
+        setResult(`Retry queued: ${jobId}`);
       } else {
-        setError(data.error || "Failed to retry");
+        setError(response.ok ? "Training job did not return a job id" : response.error);
       }
     } catch {
       setError("Connection error");
