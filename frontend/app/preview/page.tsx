@@ -1,12 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import PageLayout from "@/components/PageLayout";
 import JobPanel from "@/components/JobPanel";
 
 export default function PreviewPage() {
-  const [type, setType] = useState<"raw" | "patch">("raw");
-  const [path, setPath] = useState("");
+  return (
+    <Suspense fallback={<PreviewShell />}>
+      <PreviewContent />
+    </Suspense>
+  );
+}
+
+function PreviewShell() {
+  return (
+    <PageLayout title="Preview" description="Preview raster and patch data as images.">
+      <div className="bg-white rounded-lg shadow-sm border p-6 text-sm text-gray-500">Loading preview controls...</div>
+      <JobPanel />
+    </PageLayout>
+  );
+}
+
+function PreviewContent() {
+  const searchParams = useSearchParams();
+  const initialType = searchParams.get("type") === "patch" ? "patch" : "raw";
+  const [type, setType] = useState<"raw" | "patch">(initialType);
+  const [path, setPath] = useState(searchParams.get("path") || "");
   const [bands, setBands] = useState("1,2,3");
   const [timeIdx, setTimeIdx] = useState("0");
   const [imgUrl, setImgUrl] = useState("");

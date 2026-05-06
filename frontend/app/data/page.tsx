@@ -184,7 +184,12 @@ function FileTable({ files }: { files: FileInfo[] }) {
           <div className="divide-y">
             {group.slice(0, 20).map((f) => (
               <div key={f.path} className="px-4 py-1.5 flex justify-between text-sm">
-                <span className="font-mono text-xs text-gray-700 truncate">{f.name}</span>
+                <Link
+                  href={`/preview?type=${f.name.toLowerCase().endsWith(".npz") ? "patch" : "raw"}&path=${encodeURIComponent(f.path)}`}
+                  className="font-mono text-xs text-emerald-700 hover:underline truncate"
+                >
+                  {f.name}
+                </Link>
                 <span className="text-gray-400 text-xs whitespace-nowrap">{f.size_mb} MB</span>
               </div>
             ))}

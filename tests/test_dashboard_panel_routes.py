@@ -61,3 +61,11 @@ def test_evaluation_exposes_backend_supported_inputs() -> None:
         "label_threshold",
     ]:
         assert token in text
+
+
+def test_data_browser_links_files_to_preview() -> None:
+    data_page = (ROOT / "frontend" / "app" / "data" / "page.tsx").read_text(encoding="utf-8")
+    preview_page = (ROOT / "frontend" / "app" / "preview" / "page.tsx").read_text(encoding="utf-8")
+
+    assert "href={`/preview?" in data_page
+    assert "useSearchParams" in preview_page
