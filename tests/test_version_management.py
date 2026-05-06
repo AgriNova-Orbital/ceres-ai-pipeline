@@ -73,6 +73,24 @@ def test_replace_version_in_files_updates_project_metadata(tmp_path: Path) -> No
         json.dumps({"name": "demo-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
         encoding="utf-8",
     )
+    (tmp_path / ".env.example").write_text(
+        "# demo env\nAPP_VERSION=1.2.3\nSENTRY_RELEASE=1.2.3\nNEXT_PUBLIC_SENTRY_RELEASE=1.2.3\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  frontend:\n"
+        "    build:\n"
+        "      args:\n"
+        "        APP_VERSION: ${APP_VERSION:-1.2.3}\n"
+        "        SENTRY_RELEASE: ${SENTRY_RELEASE:-1.2.3}\n"
+        "        NEXT_PUBLIC_SENTRY_RELEASE: ${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-1.2.3}}\n"
+        "    environment:\n"
+        "      - APP_VERSION=${APP_VERSION:-1.2.3}\n"
+        "      - SENTRY_RELEASE=${SENTRY_RELEASE:-1.2.3}\n"
+        "      - NEXT_PUBLIC_SENTRY_RELEASE=${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-1.2.3}}\n",
+        encoding="utf-8",
+    )
 
     replace_version_in_files(tmp_path, "1.3.0")
 
@@ -84,6 +102,13 @@ def test_replace_version_in_files_updates_project_metadata(tmp_path: Path) -> No
     assert package["version"] == "1.3.0"
     assert lock["version"] == "1.3.0"
     assert lock["packages"][""]["version"] == "1.3.0"
+    assert (tmp_path / ".env.example").read_text(encoding="utf-8") == (
+        "# demo env\nAPP_VERSION=1.3.0\nSENTRY_RELEASE=1.3.0\nNEXT_PUBLIC_SENTRY_RELEASE=1.3.0\n"
+    )
+    compose = (tmp_path / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "APP_VERSION:-1.3.0" in compose
+    assert "SENTRY_RELEASE:-1.3.0" in compose
+    assert "NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-1.3.0}" in compose
 
 
 def test_replace_version_in_files_converts_prerelease_for_python_metadata(tmp_path: Path) -> None:
@@ -127,7 +152,7 @@ def test_release_metadata_defaults_match_version_file() -> None:
     assert f"NEXT_PUBLIC_SENTRY_RELEASE={version}" in env_example
     assert f"APP_VERSION:-{version}" in compose
     assert f"SENTRY_RELEASE:-{version}" in compose
-    assert f"NEXT_PUBLIC_SENTRY_RELEASE:-{version}" in compose
+    assert f"NEXT_PUBLIC_SENTRY_RELEASE:-${{SENTRY_RELEASE:-{version}}}" in compose
 
 
 def test_dockerfiles_define_image_version_metadata() -> None:

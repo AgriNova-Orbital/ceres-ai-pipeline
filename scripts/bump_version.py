@@ -91,13 +91,15 @@ def _replace_once(path: Path, pattern: str, replacement: str) -> None:
     path.write_text(updated, encoding="utf-8")
 
 
-def _replace_all_existing(path: Path, replacements: list[tuple[str, str]]) -> None:
+def _replace_all_existing(path: Path, replacements: list[tuple[str, str]], *, required: bool = False) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
     updated = text
     for pattern, replacement in replacements:
-        updated = re.sub(pattern, replacement, updated)
+        updated, count = re.subn(pattern, replacement, updated, flags=re.MULTILINE)
+        if required and count == 0:
+            raise ValueError(f"Version pattern not found in {path}: {pattern}")
     path.write_text(updated, encoding="utf-8")
 
 
@@ -131,14 +133,15 @@ def replace_version_in_files(root: Path, version: str) -> None:
             (r"^SENTRY_RELEASE=.*$", f"SENTRY_RELEASE={version}"),
             (r"^NEXT_PUBLIC_SENTRY_RELEASE=.*$", f"NEXT_PUBLIC_SENTRY_RELEASE={version}"),
         ],
+        required=True,
     )
     _replace_all_existing(
         root / "docker-compose.yml",
         [
             (r"APP_VERSION:-[^}]+", f"APP_VERSION:-{version}"),
-            (r"SENTRY_RELEASE:-[^}]+", f"SENTRY_RELEASE:-{version}"),
-            (r"NEXT_PUBLIC_SENTRY_RELEASE:-[^}]+", f"NEXT_PUBLIC_SENTRY_RELEASE:-{version}"),
+            (r"(?<!NEXT_PUBLIC_)SENTRY_RELEASE:-[^}]+", f"SENTRY_RELEASE:-{version}"),
         ],
+        required=True,
     )
     for dockerfile in [root / "Dockerfile", root / "frontend" / "Dockerfile"]:
         _replace_all_existing(

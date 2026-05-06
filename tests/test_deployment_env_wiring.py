@@ -79,7 +79,7 @@ def test_compose_enables_sentry_logs_for_docker_services() -> None:
         assert "SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}" in frontend
         assert "NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}" in frontend
         assert "NEXT_PUBLIC_SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-" in frontend
-        assert f"NEXT_PUBLIC_SENTRY_RELEASE=${{NEXT_PUBLIC_SENTRY_RELEASE:-{version}}}" in frontend
+        assert f"NEXT_PUBLIC_SENTRY_RELEASE=${{NEXT_PUBLIC_SENTRY_RELEASE:-${{SENTRY_RELEASE:-{version}}}}}" in frontend
 
 
 def test_env_example_documents_sentry_log_controls() -> None:
