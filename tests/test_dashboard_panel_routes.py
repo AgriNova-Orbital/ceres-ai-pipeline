@@ -46,3 +46,18 @@ def test_downloader_exposes_required_run_inputs() -> None:
     assert "eeProject" in text
     assert "drive_folder" in text
     assert "ee_project" in text
+
+
+def test_evaluation_exposes_backend_supported_inputs() -> None:
+    text = (ROOT / "frontend" / "app" / "evaluation" / "page.tsx").read_text(encoding="utf-8")
+
+    for token in [
+        "summaryCsv",
+        "precisionFloor",
+        "labelThreshold",
+        "device",
+        "summary_csv",
+        "precision_floor",
+        "label_threshold",
+    ]:
+        assert token in text
