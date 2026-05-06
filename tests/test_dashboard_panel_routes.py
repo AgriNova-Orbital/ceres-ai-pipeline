@@ -12,7 +12,7 @@ def test_dashboard_build_route_has_tracked_page() -> None:
 
     assert build_page.exists()
     ignored = subprocess.run(
-        ["git", "check-ignore", "-q", "frontend/app/build/page.tsx"],
+        ["git", "check-ignore", "--no-index", "-q", "frontend/app/build/page.tsx"],
         cwd=ROOT,
         check=False,
     )
@@ -26,3 +26,14 @@ def test_dashboard_links_only_to_existing_app_pages() -> None:
     for href in sorted(set(part.split('"', 1)[0] for part in text.split('href: "')[1:])):
         if href.startswith("/") and href not in {"/privacy", "/terms"}:
             assert (ROOT / "frontend" / "app" / href.strip("/") / "page.tsx").exists(), href
+
+
+def test_job_submitting_panels_render_job_detail_card() -> None:
+    for rel in [
+        "frontend/app/build/page.tsx",
+        "frontend/app/downloader/page.tsx",
+        "frontend/app/evaluation/page.tsx",
+        "frontend/app/inventory/page.tsx",
+    ]:
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert "JobDetailCard" in text, rel

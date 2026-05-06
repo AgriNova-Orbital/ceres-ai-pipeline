@@ -5,6 +5,7 @@ import PageLayout from "@/components/PageLayout";
 import FeedbackMessage from "@/components/FeedbackMessage";
 import SubmitButton from "@/components/SubmitButton";
 import JobPanel from "@/components/JobPanel";
+import JobDetailCard from "@/components/JobDetailCard";
 import { useApiSubmit } from "@/lib/useApiSubmit";
 
 export default function InventoryPage() {
@@ -37,6 +38,7 @@ export default function InventoryPage() {
           loadingLabel="Refreshing\u2026"
         />
       </div>
+      <JobDetailCard jobId={jobId} />
       <JobPanel />
     </PageLayout>
   );

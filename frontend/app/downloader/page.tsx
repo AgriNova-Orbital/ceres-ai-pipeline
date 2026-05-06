@@ -5,6 +5,7 @@ import PageLayout from "@/components/PageLayout";
 import FeedbackMessage from "@/components/FeedbackMessage";
 import SubmitButton from "@/components/SubmitButton";
 import JobPanel from "@/components/JobPanel";
+import JobDetailCard from "@/components/JobDetailCard";
 import { useApiSubmit } from "@/lib/useApiSubmit";
 
 const actions = [
@@ -84,6 +85,7 @@ export default function DownloaderPage() {
           loadingLabel="Submitting\u2026"
         />
       </div>
+      <JobDetailCard jobId={jobId} />
       <JobPanel />
     </PageLayout>
   );

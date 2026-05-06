@@ -5,6 +5,7 @@ import PageLayout from "@/components/PageLayout";
 import FeedbackMessage from "@/components/FeedbackMessage";
 import SubmitButton from "@/components/SubmitButton";
 import JobPanel from "@/components/JobPanel";
+import JobDetailCard from "@/components/JobDetailCard";
 import { useApiSubmit } from "@/lib/useApiSubmit";
 
 export default function BuildPage() {
@@ -105,6 +106,7 @@ export default function BuildPage() {
           />
         </div>
       </div>
+      <JobDetailCard jobId={jobId} />
       <JobPanel />
     </PageLayout>
   );
