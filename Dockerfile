@@ -2,10 +2,14 @@ FROM python:3.12-bookworm AS base
 
 WORKDIR /app
 
+ARG APP_VERSION=0.2.0
+LABEL org.opencontainers.image.version=$APP_VERSION
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_NO_CACHE=1 \
     UV_LINK_MODE=copy \
+    APP_VERSION=$APP_VERSION \
     APP_DB_PATH=/app/state/app.db \
     REDIS_URL=redis://redis:6379/0 \
     DEBIAN_FRONTEND=noninteractive

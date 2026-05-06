@@ -29,6 +29,8 @@ services:
     build:
       context: .
       target: dev
+      args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
     container_name: ceres-web-dev
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     depends_on:
@@ -37,12 +39,13 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - PYTHONUNBUFFERED=1
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-dev-secret}
       - RQ_LOG_LEVEL=DEBUG
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
       - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
@@ -75,6 +78,8 @@ services:
     build:
       context: .
       target: dev
+      args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
     container_name: ceres-worker-dev
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
@@ -84,11 +89,12 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=DEBUG
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
       - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
@@ -114,12 +120,13 @@ services:
     build:
       context: ./frontend
       args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
         SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-dev}
-        SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-0.2.0}
         NEXT_PUBLIC_SENTRY_ENABLE_LOGS: ${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
         NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-dev}
-        NEXT_PUBLIC_SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
+        NEXT_PUBLIC_SENTRY_RELEASE: ${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     container_name: ceres-frontend-dev
     depends_on:
@@ -127,14 +134,15 @@ services:
         condition: service_healthy
     environment:
       - API_URL=http://web-dev:5055
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}
       - NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
       - NEXT_PUBLIC_SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-dev}
-      - NEXT_PUBLIC_SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - NEXT_PUBLIC_SENTRY_RELEASE=${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
       - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
     ports:
@@ -146,6 +154,8 @@ services:
     build:
       context: .
       target: beta
+      args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
     container_name: ceres-web-beta
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     depends_on:
@@ -154,12 +164,13 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - PYTHONUNBUFFERED=1
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-beta-secret}
       - RQ_LOG_LEVEL=INFO
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
       - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
@@ -192,6 +203,8 @@ services:
     build:
       context: .
       target: beta
+      args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
     container_name: ceres-worker-beta
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
@@ -201,11 +214,12 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=INFO
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
       - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
@@ -231,12 +245,13 @@ services:
     build:
       context: ./frontend
       args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
         SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-beta}
-        SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-0.2.0}
         NEXT_PUBLIC_SENTRY_ENABLE_LOGS: ${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
         NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-beta}
-        NEXT_PUBLIC_SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
+        NEXT_PUBLIC_SENTRY_RELEASE: ${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     container_name: ceres-frontend-beta
     depends_on:
@@ -244,14 +259,15 @@ services:
         condition: service_healthy
     environment:
       - API_URL=http://web-beta:5055
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}
       - NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
       - NEXT_PUBLIC_SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-beta}
-      - NEXT_PUBLIC_SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - NEXT_PUBLIC_SENTRY_RELEASE=${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
       - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
     ports:
@@ -263,6 +279,8 @@ services:
     build:
       context: .
       target: release
+      args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
     container_name: ceres-web-release
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     depends_on:
@@ -271,12 +289,13 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - PYTHONUNBUFFERED=1
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-ceres-release-secret}
       - RQ_LOG_LEVEL=WARNING
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
       - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
@@ -309,6 +328,8 @@ services:
     build:
       context: .
       target: release
+      args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
     container_name: ceres-worker-release
     user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
@@ -318,11 +339,12 @@ services:
     environment:
       - APP_DB_PATH=/app/state/app.db
       - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - PYTHONUNBUFFERED=1
       - RQ_LOG_LEVEL=WARNING
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
       - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
       - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
@@ -348,12 +370,13 @@ services:
     build:
       context: ./frontend
       args:
+        APP_VERSION: ${APP_VERSION:-0.2.0}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
         SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-release}
-        SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-0.2.0}
         NEXT_PUBLIC_SENTRY_ENABLE_LOGS: ${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
         NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-release}
-        NEXT_PUBLIC_SENTRY_RELEASE: ${SENTRY_RELEASE:-local}
+        NEXT_PUBLIC_SENTRY_RELEASE: ${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
         NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
     container_name: ceres-frontend-release
     depends_on:
@@ -361,14 +384,15 @@ services:
         condition: service_healthy
     environment:
       - API_URL=http://web-release:5055
+      - APP_VERSION=${APP_VERSION:-0.2.0}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
-      - SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
       - SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}
       - NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
       - NEXT_PUBLIC_SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-release}
-      - NEXT_PUBLIC_SENTRY_RELEASE=${SENTRY_RELEASE:-local}
+      - NEXT_PUBLIC_SENTRY_RELEASE=${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
       - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
     ports:
