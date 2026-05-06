@@ -71,3 +71,29 @@ def test_replace_version_in_files_updates_project_metadata(tmp_path: Path) -> No
     assert package["version"] == "1.3.0"
     assert lock["version"] == "1.3.0"
     assert lock["packages"][""]["version"] == "1.3.0"
+
+
+def test_release_metadata_defaults_match_version_file() -> None:
+    version = read_version()
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert f"APP_VERSION={version}" in env_example
+    assert f"SENTRY_RELEASE={version}" in env_example
+    assert f"NEXT_PUBLIC_SENTRY_RELEASE={version}" in env_example
+    assert f"APP_VERSION:-{version}" in compose
+    assert f"SENTRY_RELEASE:-{version}" in compose
+    assert f"NEXT_PUBLIC_SENTRY_RELEASE:-{version}" in compose
+
+
+def test_dockerfiles_define_image_version_metadata() -> None:
+    version = read_version()
+
+    for rel in ["Dockerfile", "frontend/Dockerfile"]:
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert f"ARG APP_VERSION={version}" in text
+        assert "org.opencontainers.image.version=$APP_VERSION" in text
+
+    frontend_dockerfile = (ROOT / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+    assert f"ARG SENTRY_RELEASE={version}" in frontend_dockerfile
+    assert f"ARG NEXT_PUBLIC_SENTRY_RELEASE={version}" in frontend_dockerfile

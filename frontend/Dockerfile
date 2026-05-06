@@ -1,15 +1,17 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG APP_VERSION=0.2.0
 ARG API_URL=http://web:5055
 ARG NEXT_PUBLIC_SENTRY_DSN=
 ARG SENTRY_ENVIRONMENT=production
-ARG SENTRY_RELEASE=local
+ARG SENTRY_RELEASE=0.2.0
 ARG NEXT_PUBLIC_SENTRY_ENABLE_LOGS=true
 ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=production
-ARG NEXT_PUBLIC_SENTRY_RELEASE=local
+ARG NEXT_PUBLIC_SENTRY_RELEASE=0.2.0
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 ENV API_URL=$API_URL
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    APP_VERSION=$APP_VERSION \
     SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT \
     SENTRY_RELEASE=$SENTRY_RELEASE \
     NEXT_PUBLIC_SENTRY_ENABLE_LOGS=$NEXT_PUBLIC_SENTRY_ENABLE_LOGS \
@@ -23,6 +25,8 @@ RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /app
+ARG APP_VERSION=0.2.0
+LABEL org.opencontainers.image.version=$APP_VERSION
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -30,4 +34,5 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 USER nextjs
 EXPOSE 3000
 ENV HOSTNAME="0.0.0.0"
+ENV APP_VERSION=$APP_VERSION
 CMD ["node", "server.js"]

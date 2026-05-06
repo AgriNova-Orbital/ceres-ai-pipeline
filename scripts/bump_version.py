@@ -88,7 +88,14 @@ def replace_version_in_files(root: Path, version: str) -> None:
         ],
     )
     for dockerfile in [root / "Dockerfile", root / "frontend" / "Dockerfile"]:
-        _replace_all_existing(dockerfile, [(r"ARG APP_VERSION=[^\n]+", f"ARG APP_VERSION={version}")])
+        _replace_all_existing(
+            dockerfile,
+            [
+                (r"ARG APP_VERSION=[^\n]+", f"ARG APP_VERSION={version}"),
+                (r"ARG SENTRY_RELEASE=[^\n]+", f"ARG SENTRY_RELEASE={version}"),
+                (r"ARG NEXT_PUBLIC_SENTRY_RELEASE=[^\n]+", f"ARG NEXT_PUBLIC_SENTRY_RELEASE={version}"),
+            ],
+        )
 
 
 def _project_name(root: Path) -> str:
