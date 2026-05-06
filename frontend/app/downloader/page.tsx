@@ -20,11 +20,29 @@ export default function DownloaderPage() {
   const [startDate, setStartDate] = useState("2025-01-01");
   const [endDate, setEndDate] = useState("2025-12-31");
   const [limit, setLimit] = useState("4");
+  const [driveFolder, setDriveFolder] = useState("");
+  const [eeProject, setEeProject] = useState("");
+  const [inputError, setInputError] = useState("");
   const { loading, result, error, jobId, submit, clearResult, clearError } =
     useApiSubmit();
 
   function handleSubmit() {
-    submit("/api/run/downloader", { action, stage, start_date: startDate, end_date: endDate, limit });
+    if (action === "download_all" && !driveFolder.trim()) {
+      setInputError("Drive Folder ID is required for Download All.");
+      clearResult();
+      clearError();
+      return;
+    }
+    setInputError("");
+    submit("/api/run/downloader", {
+      action,
+      stage,
+      start_date: startDate,
+      end_date: endDate,
+      limit,
+      drive_folder: driveFolder,
+      ee_project: eeProject,
+    });
   }
 
   return (
@@ -33,12 +51,12 @@ export default function DownloaderPage() {
       description="Download weekly Sentinel-2 rasters from Google Earth Engine."
     >
       <div className="bg-white rounded-lg shadow-sm border p-6 space-y-6">
-        {(result || error) && (
+        {(result || error || inputError) && (
           <FeedbackMessage
-            message={result || error}
+            message={result || error || inputError}
             type={result ? "success" : "error"}
             jobId={jobId || undefined}
-            onClear={() => { clearResult(); clearError(); }}
+            onClear={() => { clearResult(); clearError(); setInputError(""); }}
           />
         )}
 
@@ -76,6 +94,8 @@ export default function DownloaderPage() {
           <Field label="Limit" value={limit} onChange={setLimit} />
           <Field label="Start Date" value={startDate} onChange={setStartDate} type="date" />
           <Field label="End Date" value={endDate} onChange={setEndDate} type="date" />
+          <Field label="Drive Folder ID" value={driveFolder} onChange={setDriveFolder} />
+          <Field label="Earth Engine Project" value={eeProject} onChange={setEeProject} />
         </div>
 
         <SubmitButton

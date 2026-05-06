@@ -37,3 +37,12 @@ def test_job_submitting_panels_render_job_detail_card() -> None:
     ]:
         text = (ROOT / rel).read_text(encoding="utf-8")
         assert "JobDetailCard" in text, rel
+
+
+def test_downloader_exposes_required_run_inputs() -> None:
+    text = (ROOT / "frontend" / "app" / "downloader" / "page.tsx").read_text(encoding="utf-8")
+
+    assert "driveFolder" in text
+    assert "eeProject" in text
+    assert "drive_folder" in text
+    assert "ee_project" in text
