@@ -88,7 +88,20 @@ Use this checklist before deploying Ceres AI Pipeline to a shared environment.
 - [ ] Document who can rotate OAuth secrets.
 - [ ] Document rollback procedure if deployment fails.
 
-## 9. Go/No-Go Gate
+## 9. Pilot Hardening Gate
+
+- [ ] Release Compose fails without required secrets.
+- [ ] Backend auth runs with `APP_REQUIRE_CLERK_AUTH=true`.
+- [ ] Legacy `/api/auth/*` routes fail closed when Clerk auth is required but issuer configuration is missing.
+- [ ] Admin APIs reject non-admin Clerk users and do not trust `unsafe_metadata` for admin access.
+- [ ] User-supplied paths are scoped to the workspace.
+- [ ] Training script is fixed to the approved script.
+- [ ] Playwright output directories remain ignored by git.
+- [ ] Browser smoke tests pass on desktop and mobile.
+- [ ] Missing-Clerk frontend fallback is not used for release deployments.
+- [ ] Frontend Clerk publishable key is required for release, if not already enforced elsewhere.
+
+## 10. Go/No-Go Gate
 
 Deployment is ready only if all of the following are true:
 
