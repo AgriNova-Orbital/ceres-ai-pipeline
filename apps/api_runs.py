@@ -116,12 +116,37 @@ def register_runs_api(
             raise ValueError(f"{field} must not be empty")
         return out
 
-    def _normalize_path(root: Path, path_like: str | None, default: str) -> str:
-        raw = (path_like or default).strip()
+    def _normalize_path(
+        root: Path, path_like: str | None, default: str, *, field: str = "path"
+    ) -> str:
+        if path_like is None:
+            raw = default
+        elif not isinstance(path_like, str):
+            raise ValueError(f"{field} must be a string path")
+        else:
+            raw = path_like.strip() or default
         p = Path(raw)
         if p.is_absolute():
-            return str(p)
-        return str(root / raw)
+            raise ValueError(f"{field} must be relative to the repository root")
+        candidate = root / raw
+        resolved = candidate.resolve(strict=False)
+        try:
+            resolved.relative_to(root.resolve(strict=False))
+        except ValueError as e:
+            raise ValueError(f"{field} must stay within the repository root") from e
+        return str(resolved)
+
+    def _approved_train_script(root: Path, train_script: Any) -> Path:
+        default = "scripts/train_wheat_risk_lstm.py"
+        if train_script is None:
+            raw = ""
+        elif not isinstance(train_script, str):
+            raise ValueError("train_script must be a string path")
+        else:
+            raw = train_script.strip()
+        if raw and raw != default:
+            raise ValueError(f"train_script must be omitted, empty, or {default}")
+        return root / default
 
     # ── Downloader ───────────────────────────────────────
 
@@ -157,11 +182,15 @@ def register_runs_api(
             return jsonify(job_id=job_id, status="enqueued")
 
         if action == "refresh_inventory":
-            raw_dir = _normalize_path(
-                root,
-                data.get("raw_dir"),
-                "data/raw/france_2025_weekly",
-            )
+            try:
+                raw_dir = _normalize_path(
+                    root,
+                    data.get("raw_dir"),
+                    "data/raw/france_2025_weekly",
+                    field="raw_dir",
+                )
+            except ValueError as e:
+                return jsonify(error=str(e)), 400
             payload = {
                 "user_id": _current_user_id(),
                 "input_dir": raw_dir,
@@ -186,9 +215,15 @@ def register_runs_api(
         action = data.get("action", "build_level")
         root = Path(app.config["REPO_ROOT"])
         level = data.get("level", "1")
-        raw_dir = _normalize_path(
-            root, data.get("raw_dir"), "data/raw/france_2025_weekly"
-        )
+        try:
+            raw_dir = _normalize_path(
+                root,
+                data.get("raw_dir"),
+                "data/raw/france_2025_weekly",
+                field="raw_dir",
+            )
+        except ValueError as e:
+            return jsonify(error=str(e)), 400
         max_patches = int(data.get("max_patches", 12000))
 
         if action not in {"build_level", "dry_run"}:
@@ -225,6 +260,10 @@ def register_runs_api(
         root = Path(app.config["REPO_ROOT"])
 
         if action == "dry_run":
+            try:
+                train_script = _approved_train_script(root, data.get("train_script"))
+            except ValueError as e:
+                return jsonify(error=str(e)), 400
             payload = {
                 "user_id": _current_user_id(),
                 "levels": _parse_int_list(
@@ -241,9 +280,7 @@ def register_runs_api(
                 "index_csv_template": None,
                 "root_dir": None,
                 "root_dir_template": None,
-                "train_script": Path(
-                    str(data.get("train_script", "scripts/train_wheat_risk_lstm.py"))
-                ),
+                "train_script": train_script,
                 "epochs": int(data.get("epochs", 10)),
                 "batch_size": int(data.get("batch_size", 8)),
                 "lr": float(data.get("lr", 1e-3)),
@@ -259,6 +296,10 @@ def register_runs_api(
             return jsonify(job_id=job_id, status="enqueued")
 
         if action == "run_matrix":
+            try:
+                train_script = _approved_train_script(root, data.get("train_script"))
+            except ValueError as e:
+                return jsonify(error=str(e)), 400
             payload = {
                 "user_id": _current_user_id(),
                 "levels": _parse_int_list(
@@ -282,9 +323,7 @@ def register_runs_api(
                 "root_dir_template": str(
                     data.get("root_dir_template", "./data/wheat_risk/staged/L{level}")
                 ),
-                "train_script": Path(
-                    str(data.get("train_script", "scripts/train_wheat_risk_lstm.py"))
-                ),
+                "train_script": train_script,
                 "epochs": int(data.get("epochs", 10)),
                 "batch_size": int(data.get("batch_size", 8)),
                 "lr": float(data.get("lr", 1e-3)),
