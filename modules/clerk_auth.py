@@ -21,6 +21,15 @@ def is_clerk_auth_enabled() -> bool:
     return bool(os.environ.get("CLERK_JWT_ISSUER", "").strip())
 
 
+def is_clerk_auth_required() -> bool:
+    return os.environ.get("APP_REQUIRE_CLERK_AUTH", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def extract_bearer_token(authorization: str | None) -> str:
     if not authorization:
         raise ClerkAuthError("Missing bearer token")

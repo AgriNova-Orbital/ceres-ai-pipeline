@@ -209,7 +209,13 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         template_folder=str(app_root / "templates"),
         static_folder=str(app_root / "static"),
     )
-    secret_key = os.environ.get("WEBUI_SECRET_KEY", os.urandom(32).hex())
+    configured_secret_key = os.environ.get("WEBUI_SECRET_KEY", "").strip()
+    if (
+        os.environ.get("FLASK_ENV", "").strip().lower() == "production"
+        and not configured_secret_key
+    ):
+        raise RuntimeError("WEBUI_SECRET_KEY is required when FLASK_ENV=production")
+    secret_key = configured_secret_key or os.urandom(32).hex()
     app.config["SECRET_KEY"] = secret_key
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
@@ -332,6 +338,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     def _require_clerk_api_auth() -> Response | None:
         from modules import clerk_auth
 
+        if clerk_auth.is_clerk_auth_required() and not clerk_auth.is_clerk_auth_enabled():
+            return jsonify(error="Authentication is not configured"), 503
         if not clerk_auth.is_clerk_auth_enabled():
             return None
         if request.endpoint == "api_oauth.oauth_callback":

@@ -27,6 +27,60 @@ def test_healthz_stays_public_when_clerk_auth_is_enabled(monkeypatch, tmp_path: 
     assert resp.get_json()["status"] == "ok"
 
 
+def test_production_startup_requires_webui_secret_key(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.delenv("WEBUI_SECRET_KEY", raising=False)
+
+    from apps.wheat_risk_webui import create_app
+
+    with pytest.raises(RuntimeError, match="WEBUI_SECRET_KEY"):
+        create_app(repo_root=tmp_path)
+
+
+def test_non_production_startup_keeps_random_secret_fallback(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("FLASK_ENV", "development")
+    monkeypatch.delenv("WEBUI_SECRET_KEY", raising=False)
+
+    from apps.wheat_risk_webui import create_app
+
+    app = create_app(repo_root=tmp_path)
+
+    assert app.config["SECRET_KEY"]
+
+
+@pytest.mark.parametrize("truthy_value", ["1", "true", "TRUE", "yes", "on"])
+def test_clerk_auth_required_accepts_truthy_values(monkeypatch, truthy_value: str):
+    monkeypatch.setenv("APP_REQUIRE_CLERK_AUTH", truthy_value)
+
+    from modules import clerk_auth
+
+    assert clerk_auth.is_clerk_auth_required() is True
+
+
+@pytest.mark.parametrize("falsey_value", ["", "0", "false", "no", "off", "unexpected"])
+def test_clerk_auth_required_rejects_non_truthy_values(monkeypatch, falsey_value: str):
+    monkeypatch.setenv("APP_REQUIRE_CLERK_AUTH", falsey_value)
+
+    from modules import clerk_auth
+
+    assert clerk_auth.is_clerk_auth_required() is False
+
+
+def test_required_clerk_auth_returns_503_when_not_configured(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("APP_REQUIRE_CLERK_AUTH", "true")
+    monkeypatch.delenv("CLERK_JWT_ISSUER", raising=False)
+
+    from apps.wheat_risk_webui import create_app
+
+    app = create_app(repo_root=tmp_path)
+    client = app.test_client()
+
+    resp = client.get("/api/admin/system")
+
+    assert resp.status_code == 503
+    assert resp.get_json()["error"] == "Authentication is not configured"
+
+
 def test_api_run_requires_clerk_bearer_when_clerk_auth_is_enabled(
     monkeypatch, tmp_path: Path
 ):
