@@ -87,6 +87,17 @@ def _audience_matches(actual: object, expected: str) -> bool:
     return False
 
 
+def is_admin_claims(claims: dict[str, object]) -> bool:
+    metadata_keys = ("public_metadata", "private_metadata")
+    for key in metadata_keys:
+        metadata = claims.get(key)
+        if isinstance(metadata, dict) and metadata.get("role") == "admin":
+            return True
+
+    roles = claims.get("roles")
+    return isinstance(roles, list) and "admin" in roles
+
+
 def verify_clerk_token(token: str) -> dict[str, object]:
     from authlib.jose import JsonWebKey, jwt
 

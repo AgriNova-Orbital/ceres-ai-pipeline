@@ -362,6 +362,9 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         except clerk_auth.ClerkVerificationUnavailable:
             app.logger.warning("Clerk verification unavailable", exc_info=True)
             return jsonify(error="Authentication service unavailable"), 503
+        if request.endpoint and request.endpoint.startswith("api_admin."):
+            if not clerk_auth.is_admin_claims(user):
+                return jsonify(error="Admin role required"), 403
         if request.endpoint == "api_oauth.oauth_login":
             pending_user = {"sub": str(user["sub"])}
             if user.get("exp") is not None:
