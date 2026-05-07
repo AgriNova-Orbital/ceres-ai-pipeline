@@ -68,6 +68,13 @@ def test_root_dockerignore_excludes_frontend_build_artifacts() -> None:
     assert "frontend/.next/" in dockerignore
 
 
+def test_dockerignore_excludes_local_secret_and_cache_artifacts() -> None:
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+
+    for pattern in (".cache/", ".env*", "client_secret_*.json", "oauth_token*.json"):
+        assert pattern in dockerignore
+
+
 def test_env_example_documents_clerk_jwks_cache_ttl() -> None:
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 

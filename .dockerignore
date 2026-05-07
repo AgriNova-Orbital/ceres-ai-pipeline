@@ -10,11 +10,14 @@ __pycache__/
 
 # Environment
 .env
+.env*
 .env.bak
 .env.example
 .venv
 venv/
 ENV/
+client_secret_*.json
+oauth_token*.json
 
 # IDE
 .vscode/
@@ -23,6 +26,7 @@ ENV/
 *.swo
 
 # Testing
+.cache/
 .pytest_cache/
 .coverage
 htmlcov/
