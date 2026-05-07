@@ -31,6 +31,8 @@ def test_ci_workflow_runs_required_verification_gates() -> None:
     assert "run: npm ci" in workflow
     assert "run: node --test *.test.js lib/*.test.js" in workflow
     assert "run: npm run build" in workflow
+    assert "run: npx playwright install --with-deps chromium" in workflow
+    assert "run: npm run e2e" in workflow
 
     assert "  compose:" in workflow
     assert "WEBUI_SECRET_KEY=test-secret" in workflow

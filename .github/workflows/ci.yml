@@ -34,6 +34,10 @@ jobs:
         run: node --test *.test.js lib/*.test.js
       - name: Build frontend
         run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E smoke tests
+        run: npm run e2e
 
   compose:
     runs-on: ubuntu-latest
