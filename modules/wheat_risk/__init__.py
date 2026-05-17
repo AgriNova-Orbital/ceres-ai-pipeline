@@ -1,6 +1,7 @@
 """Public API for the wheat risk pipeline."""
 
 from .config import PipelineConfig, StagePreset
+from .dataset import WheatRiskNpzSequenceDataset, WheatRiskShardedNpzDataset
 from .export_patches import (
     export_patch_tensors_to_drive,
     patch_tensor_shape,
@@ -31,6 +32,8 @@ from .timebins import week_bins
 __all__ = [
     "PipelineConfig",
     "StagePreset",
+    "WheatRiskNpzSequenceDataset",
+    "WheatRiskShardedNpzDataset",
     "week_bins",
     "FeatureSchema",
     "FeatureBuildConfig",
