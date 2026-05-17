@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 NOTEBOOK = Path("notebooks/colab_raw_to_p128_kaggle_pipeline.ipynb")
+SUPERSEDED_P128_NOTEBOOK = Path("notebooks/colab_patch_factory_2025w36_w52_p128.ipynb")
 
 
 def _notebook_sources() -> tuple[dict, str]:
@@ -82,3 +83,15 @@ def test_raw_integrity_scan_buffers_csv_rows_instead_of_appending_per_file() -> 
         and node.func.id == "append_csv"
     ]
     assert append_calls == []
+
+
+def test_integrated_rebalance_three_tiles_keeps_validation_split() -> None:
+    _nb, sources = _notebook_sources()
+
+    assert "if len(counts) == 3:" in sources
+    assert 'split_by_tile[tile_keys[1]] = "val"' in sources
+    assert 'split_by_tile[tile_keys[2]] = "test"' in sources
+
+
+def test_superseded_p128_notebook_is_not_kept_with_integrated_notebook() -> None:
+    assert not SUPERSEDED_P128_NOTEBOOK.exists()

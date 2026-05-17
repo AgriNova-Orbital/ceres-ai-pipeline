@@ -32,3 +32,21 @@ def test_partial_edge_tile_dimensions_are_valid() -> None:
         patch_sizes=(64, 128),
         stripe_height=256,
     )
+
+
+def test_smoke_factory_has_no_import_time_colab_side_effects() -> None:
+    source = Path("notebooks/colab_patch_factory_smoke.py").read_text()
+    pre_main = source.split('if __name__ == "__main__":')[0]
+
+    assert "ensure_imports()\n\nimport rasterio" not in source
+    assert "\nensure_imports()\n" not in pre_main
+    assert "\nmount_drive()\n" not in pre_main
+
+
+def test_smoke_factory_uses_drive_local_atomic_tmp_and_ceil_progress() -> None:
+    source = Path("notebooks/colab_patch_factory_smoke.py").read_text()
+
+    assert 'tmp_path = final_path.with_suffix(".tmp.npz")' in source
+    assert "tmp_path.replace(final_path)" in source
+    assert "shutil.move" not in source
+    assert "math.ceil(tile.height / STRIPE_HEIGHT)" in source

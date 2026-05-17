@@ -16,27 +16,32 @@ import csv
 import json
 import math
 import re
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
+
+rasterio: Any | None = None
+Window: Any | None = None
+tqdm: Any | None = None
 
 
 def ensure_imports() -> None:
     """Install Colab dependencies if they are missing."""
+    global Window, rasterio, tqdm
+
     missing: list[str] = []
     try:
-        import rasterio  # noqa: F401
+        import rasterio as rasterio_module  # noqa: F401
     except ModuleNotFoundError:
         missing.append("rasterio")
 
     try:
-        import tqdm  # noqa: F401
+        import tqdm as tqdm_module  # noqa: F401
     except ModuleNotFoundError:
         missing.append("tqdm")
 
@@ -45,25 +50,26 @@ def ensure_imports() -> None:
             [sys.executable, "-m", "pip", "install", "-q", *missing]
         )
 
+    import rasterio as rasterio_module
+    from rasterio.windows import Window as window_cls
+    from tqdm.auto import tqdm as tqdm_fn
 
-ensure_imports()
+    rasterio = rasterio_module
+    Window = window_cls
+    tqdm = tqdm_fn
 
-import rasterio
-from rasterio.windows import Window
-from tqdm.auto import tqdm
+
+def mount_drive() -> None:
+    try:
+        from google.colab import drive  # type: ignore
+
+        drive.mount("/content/drive")
+    except ModuleNotFoundError:
+        print("Not running in Colab; skipping drive.mount().")
 
 
 # %% [markdown]
 # ## Mount Google Drive
-
-# %%
-try:
-    from google.colab import drive  # type: ignore
-
-    drive.mount("/content/drive")
-except ModuleNotFoundError:
-    print("Not running in Colab; skipping drive.mount().")
-
 
 # %% [markdown]
 # ## Config
@@ -88,8 +94,6 @@ VALID_RATIO_MIN = 0.80
 NODATA = -32768.0
 SKIP_EXISTING = True
 
-LOCAL_TMP_DIR = Path("/content/ceres_tmp_shards")
-
 FEATURE_BANDS = (
     "ndvi",
     "ndmi",
@@ -104,10 +108,6 @@ FEATURE_BANDS = (
 )
 LABEL_BAND = "risk"
 FINAL_BANDS = FEATURE_BANDS + (LABEL_BAND,)
-
-print("RAW_DIR", RAW_DIR)
-print("OUTPUT_ROOT", OUTPUT_ROOT)
-
 
 # %% [markdown]
 # ## Helpers
@@ -412,12 +412,11 @@ def valid_final_shard(path: Path) -> bool:
 
 def save_npz_atomic(final_path: Path, arrays: dict[str, np.ndarray]) -> None:
     final_path.parent.mkdir(parents=True, exist_ok=True)
-    LOCAL_TMP_DIR.mkdir(parents=True, exist_ok=True)
-    tmp_path = LOCAL_TMP_DIR / f"{final_path.name}.tmp.npz"
+    tmp_path = final_path.with_suffix(".tmp.npz")
     if tmp_path.exists():
         tmp_path.unlink()
     np.savez_compressed(tmp_path, **arrays)
-    shutil.move(str(tmp_path), str(final_path))
+    tmp_path.replace(final_path)
 
 
 def build_shard(tile: RawTile, patch_size: int, row_start: int, row_end_exclusive: int) -> dict[str, np.ndarray] | None:
@@ -493,7 +492,7 @@ def generate_shards_for_patch_size(tiles: list[RawTile], patch_size: int) -> Non
     shards_dir = dataset_dir / "shards"
     shards_dir.mkdir(parents=True, exist_ok=True)
 
-    total_jobs = sum(tile.height // STRIPE_HEIGHT for tile in tiles)
+    total_jobs = sum(math.ceil(tile.height / STRIPE_HEIGHT) for tile in tiles)
     kept_shards = 0
     kept_samples = 0
     skipped_existing = 0
@@ -636,6 +635,12 @@ def smoke_load(patch_size: int) -> None:
 
 # %%
 def run_patch_factory() -> None:
+    ensure_imports()
+    mount_drive()
+
+    print("RAW_DIR", RAW_DIR)
+    print("OUTPUT_ROOT", OUTPUT_ROOT)
+
     tiles = scan_raw_tiles(RAW_DIR)
     print(f"Raw files selected: {len(tiles)}")
     print("Weeks:", sorted({tile.week_key for tile in tiles}))

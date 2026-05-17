@@ -142,17 +142,29 @@ def _read_sharded_index_csv(
         if split is not None and "split" not in fieldnames:
             raise ValueError(f"Missing required column in {index_csv}: split")
 
-        for row in reader:
+        for row_num, row in enumerate(reader, start=2):
             row_split = (row.get("split") or "").strip() or None
             if split is not None and row_split != split:
                 continue
 
             shard_path = (row.get("shard_path") or "").strip()
             if not shard_path:
-                continue
-            num_samples = int((row.get("num_samples") or "0").strip())
+                raise ValueError(
+                    f"Invalid shard row {row_num} in {index_csv}: shard_path is required"
+                )
+            raw_num_samples = (row.get("num_samples") or "").strip()
+            try:
+                num_samples = int(raw_num_samples)
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid shard row {row_num} in {index_csv}: "
+                    f"num_samples must be an integer, got {raw_num_samples!r}"
+                ) from e
             if num_samples <= 0:
-                continue
+                raise ValueError(
+                    f"Invalid shard row {row_num} in {index_csv}: "
+                    f"num_samples must be > 0, got {num_samples}"
+                )
             rows.append(
                 ShardedNpzShard(
                     shard_path=Path(shard_path),
@@ -170,6 +182,9 @@ class WheatRiskShardedNpzDataset:
     - X: (N, C, H, W)
     - y: (N,)
     - valid_mask: (N, H, W), required only when return_mask=True
+
+    The cache holds full shard arrays per Dataset instance. Use cache_size=0 when
+    DataLoader workers or shard sizes make that memory cost too high.
     """
 
     def __init__(

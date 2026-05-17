@@ -229,3 +229,53 @@ def test_sharded_dataset_filters_by_split_and_can_return_mask(
     assert float(y.item()) == pytest.approx(100.0)
     assert tuple(mask.shape) == (4, 4)
     assert mask.dtype == np.bool_
+
+
+def test_sharded_dataset_rejects_malformed_index_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import modules.wheat_risk.dataset as dataset_module
+
+    monkeypatch.setattr(dataset_module, "_import_torch", lambda: _FakeTorch)
+    WheatRiskShardedNpzDataset = dataset_module.WheatRiskShardedNpzDataset
+
+    _write_shard(
+        tmp_path,
+        "shards/train.npz",
+        start_value=0,
+        num_samples=2,
+        patch_size=4,
+        split="train",
+    )
+    index_csv = _write_index(
+        tmp_path,
+        [
+            {
+                "shard_path": "shards/train.npz",
+                "patch_size": 4,
+                "num_samples": 2,
+                "week_key": "2025W36",
+                "tile_key": "tile-a",
+                "tile_id": 0,
+                "split": "train",
+                "row_start": 0,
+                "row_end": 3,
+                "col_offset": 0,
+            },
+            {
+                "shard_path": "",
+                "patch_size": 4,
+                "num_samples": 1,
+                "week_key": "2025W36",
+                "tile_key": "tile-b",
+                "tile_id": 1,
+                "split": "train",
+                "row_start": 0,
+                "row_end": 3,
+                "col_offset": 0,
+            },
+        ],
+    )
+
+    with pytest.raises(ValueError, match="row 3.*shard_path"):
+        WheatRiskShardedNpzDataset(index_csv)
