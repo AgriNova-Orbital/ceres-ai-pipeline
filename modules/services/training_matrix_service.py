@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Sequence
 
+from modules.path_safety import resolve_repo_path
 from modules.wheat_risk.staged_training import build_matrix
 
 
@@ -75,6 +76,7 @@ def run_matrix(
     num_workers: int,
     device: str,
     seed_base: int,
+    repo_root: Path | None = None,
 ) -> int:
     cells = build_matrix(levels=levels, steps=steps, base_patch=base_patch)
 
@@ -116,6 +118,11 @@ def run_matrix(
         subset_count = cell.sample_size
         source_index_csv = ""
         all_paths: list[str] = []
+        root_dir_val: Path | None = None
+        if root_dir_template:
+            root_dir_val = Path(str(root_dir_template).format(level=cell.level_split))
+        elif root_dir is not None:
+            root_dir_val = root_dir
         if execute_train:
             if index_csv_template:
                 index_csv_for_cell = Path(
@@ -148,6 +155,26 @@ def run_matrix(
                     )
                     continue
                 parsed = _read_index_npz_paths(index_csv_for_cell)
+                if repo_root is not None:
+                    base_dir = (
+                        root_dir_val
+                        if root_dir_val is not None
+                        else index_csv_for_cell.parent
+                    )
+                    try:
+                        parsed = [
+                            str(
+                                resolve_repo_path(
+                                    repo_root,
+                                    p,
+                                    field="npz_path",
+                                    base=base_dir,
+                                )
+                            )
+                            for p in parsed
+                        ]
+                    except ValueError as e:
+                        raise SystemExit(str(e)) from e
                 if not parsed:
                     status = "failed"
                     failures += 1
@@ -211,13 +238,6 @@ def run_matrix(
                 "--save-path",
                 str(checkpoint_path),
             ]
-            root_dir_val: Path | None = None
-            if root_dir_template:
-                root_dir_val = Path(
-                    str(root_dir_template).format(level=cell.level_split)
-                )
-            elif root_dir is not None:
-                root_dir_val = root_dir
             if root_dir_val is not None:
                 cmd.extend(["--root-dir", str(root_dir_val)])
 

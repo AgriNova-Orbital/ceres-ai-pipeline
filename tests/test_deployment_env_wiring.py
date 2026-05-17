@@ -21,7 +21,7 @@ def _service_block(compose_text: str, service_name: str) -> str:
 def test_compose_wires_clerk_env_to_web_and_frontend_services() -> None:
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
-    for profile in ("dev", "beta", "release"):
+    for profile in ("dev", "beta"):
         web = _service_block(compose, f"web-{profile}")
         assert "CLERK_JWT_ISSUER=${CLERK_JWT_ISSUER:-}" in web
         assert "CLERK_JWKS_URL=${CLERK_JWKS_URL:-}" in web
@@ -32,6 +32,19 @@ def test_compose_wires_clerk_env_to_web_and_frontend_services() -> None:
         assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" in frontend
         assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" in frontend
         assert "CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}" in frontend
+
+    release_web = _service_block(compose, "web-release")
+    assert "WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?" in release_web
+    assert "APP_REQUIRE_CLERK_AUTH=true" in release_web
+    assert "CLERK_JWT_ISSUER=${CLERK_JWT_ISSUER:?" in release_web
+    assert "CLERK_JWT_AUDIENCE=${CLERK_JWT_AUDIENCE:?" in release_web
+    assert "CLERK_JWKS_URL=${CLERK_JWKS_URL:-}" in release_web
+    assert "CLERK_JWKS_CACHE_TTL_SECONDS=${CLERK_JWKS_CACHE_TTL_SECONDS:-300}" in release_web
+
+    frontend = _service_block(compose, "frontend-release")
+    assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" in frontend
+    assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" in frontend
+    assert "CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}" in frontend
 
 
 def test_frontend_dockerfile_only_bakes_public_clerk_key() -> None:
@@ -53,6 +66,26 @@ def test_root_dockerignore_excludes_frontend_build_artifacts() -> None:
 
     assert "frontend/node_modules/" in dockerignore
     assert "frontend/.next/" in dockerignore
+
+
+def test_dockerignore_excludes_local_secret_and_cache_artifacts() -> None:
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+
+    for pattern in (".cache/", ".env*", "client_secret_*.json", "oauth_token*.json"):
+        assert pattern in dockerignore
+
+    assert dockerignore.count(".env*") == 1
+    assert ".env\n" not in dockerignore
+    assert ".env.bak" not in dockerignore
+    assert ".env.example" not in dockerignore
+
+
+def test_compose_binds_redis_to_loopback_only() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    redis = _service_block(compose, "redis")
+
+    assert '      - "127.0.0.1:6379:6379"' in redis
+    assert '      - "6379:6379"' not in redis
 
 
 def test_env_example_documents_clerk_jwks_cache_ttl() -> None:

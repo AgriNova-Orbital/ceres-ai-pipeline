@@ -12,6 +12,8 @@ def register_auth_api(app, sqlite_store) -> None:
     def block_legacy_password_auth_when_clerk_is_enabled():
         from modules import clerk_auth
 
+        if clerk_auth.is_clerk_auth_required() and not clerk_auth.is_clerk_auth_enabled():
+            return jsonify(error="Authentication is not configured"), 503
         if clerk_auth.is_clerk_auth_enabled():
             return jsonify(error="Legacy password auth is disabled"), 410
         return None

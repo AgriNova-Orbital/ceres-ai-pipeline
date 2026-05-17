@@ -21,6 +21,15 @@ def is_clerk_auth_enabled() -> bool:
     return bool(os.environ.get("CLERK_JWT_ISSUER", "").strip())
 
 
+def is_clerk_auth_required() -> bool:
+    return os.environ.get("APP_REQUIRE_CLERK_AUTH", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def extract_bearer_token(authorization: str | None) -> str:
     if not authorization:
         raise ClerkAuthError("Missing bearer token")
@@ -76,6 +85,22 @@ def _audience_matches(actual: object, expected: str) -> bool:
     if isinstance(actual, list):
         return expected in actual
     return False
+
+
+def is_admin_claims(claims: dict[str, object]) -> bool:
+    if claims.get("role") == "admin" or claims.get("org_role") == "admin":
+        return True
+
+    metadata_keys = ("public_metadata", "private_metadata")
+    for key in metadata_keys:
+        metadata = claims.get(key)
+        if isinstance(metadata, dict) and metadata.get("role") == "admin":
+            return True
+
+    roles = claims.get("roles")
+    if isinstance(roles, str):
+        return roles == "admin"
+    return isinstance(roles, list) and "admin" in roles
 
 
 def verify_clerk_token(token: str) -> dict[str, object]:

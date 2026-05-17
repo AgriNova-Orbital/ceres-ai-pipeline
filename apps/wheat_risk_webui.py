@@ -41,6 +41,7 @@ from apps.api_admin import register_admin_api
 from apps.api_runs import register_runs_api
 from apps.api_oauth import register_oauth_api
 from modules.observability import init_sentry
+from modules.path_safety import normalize_repo_path
 
 
 _FAKE_REDIS_SERVER = None
@@ -209,7 +210,22 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         template_folder=str(app_root / "templates"),
         static_folder=str(app_root / "static"),
     )
-    secret_key = os.environ.get("WEBUI_SECRET_KEY", os.urandom(32).hex())
+    configured_secret_key = os.environ.get("WEBUI_SECRET_KEY", "").strip()
+    auth_required = os.environ.get("APP_REQUIRE_CLERK_AUTH", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if (
+        os.environ.get("FLASK_ENV", "").strip().lower() == "production"
+        or auth_required
+    ) and not configured_secret_key:
+        raise RuntimeError(
+            "WEBUI_SECRET_KEY is required when FLASK_ENV=production "
+            "or APP_REQUIRE_CLERK_AUTH=true"
+        )
+    secret_key = configured_secret_key or os.urandom(32).hex()
     app.config["SECRET_KEY"] = secret_key
     app.config["REPO_ROOT"] = root
     app.config["JOB_HISTORY"] = []
@@ -332,6 +348,8 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
     def _require_clerk_api_auth() -> Response | None:
         from modules import clerk_auth
 
+        if clerk_auth.is_clerk_auth_required() and not clerk_auth.is_clerk_auth_enabled():
+            return jsonify(error="Authentication is not configured"), 503
         if not clerk_auth.is_clerk_auth_enabled():
             return None
         if request.endpoint == "api_oauth.oauth_callback":
@@ -354,6 +372,9 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         except clerk_auth.ClerkVerificationUnavailable:
             app.logger.warning("Clerk verification unavailable", exc_info=True)
             return jsonify(error="Authentication service unavailable"), 503
+        if request.endpoint and request.endpoint.startswith("api_admin."):
+            if not clerk_auth.is_admin_claims(user):
+                return jsonify(error="Admin role required"), 403
         if request.endpoint == "api_oauth.oauth_login":
             pending_user = {"sub": str(user["sub"])}
             if user.get("exp") is not None:
@@ -907,7 +928,15 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             if isinstance(raw_file_ids, list)
             else []
         )
-        save_dir = str(data.get("save_dir", "data/raw/drive_download")).strip()
+        try:
+            save_dir = normalize_repo_path(
+                app.config["REPO_ROOT"],
+                data.get("save_dir"),
+                "data/raw/drive_download",
+                field="save_dir",
+            )
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
 
         if not folder_id and not file_ids:
             return jsonify({"error": "folder_id or file_ids required"}), 400

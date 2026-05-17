@@ -1,5 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -15,7 +15,23 @@ const isPublicRoute = createRouteMatcher([
 
 const isApiRoute = createRouteMatcher(["/api(.*)"]);
 
-export default clerkMiddleware(async (auth, request) => {
+function redirectToLocalSignIn(request: NextRequest) {
+  return NextResponse.redirect(new URL("/login", request.url));
+}
+
+function handleMissingClerkConfig(request: NextRequest) {
+  if (isPublicRoute(request)) {
+    return NextResponse.next();
+  }
+
+  if (isApiRoute(request)) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  return redirectToLocalSignIn(request);
+}
+
+const handleClerkAuth = clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) {
     return NextResponse.next();
   }
@@ -40,6 +56,8 @@ export default clerkMiddleware(async (auth, request) => {
 
   return NextResponse.next();
 });
+
+export default process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? handleClerkAuth : handleMissingClerkConfig;
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],

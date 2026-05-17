@@ -197,6 +197,8 @@ def task_run_matrix(kwargs: dict[str, Any]) -> dict[str, Any]:
     if kwargs.get("root_dir"):
         kwargs["root_dir"] = Path(kwargs["root_dir"])
     kwargs["train_script"] = Path(kwargs["train_script"])
+    if kwargs.get("repo_root"):
+        kwargs["repo_root"] = Path(kwargs["repo_root"])
     result = run_matrix(**kwargs)
     _set_progress("done", 100)
     return {"failures": result}
@@ -210,6 +212,8 @@ def task_run_eval(kwargs: dict[str, Any]) -> dict[str, Any]:
     kwargs["summary_csv"] = Path(kwargs["summary_csv"])
     kwargs["output_csv"] = Path(kwargs["output_csv"])
     kwargs["best_json"] = Path(kwargs["best_json"])
+    if kwargs.get("repo_root"):
+        kwargs["repo_root"] = Path(kwargs["repo_root"])
     try:
         result = run_evaluation(**kwargs)
         _set_progress("done", 100)
