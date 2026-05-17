@@ -88,6 +88,9 @@ def _audience_matches(actual: object, expected: str) -> bool:
 
 
 def is_admin_claims(claims: dict[str, object]) -> bool:
+    if claims.get("role") == "admin" or claims.get("org_role") == "admin":
+        return True
+
     metadata_keys = ("public_metadata", "private_metadata")
     for key in metadata_keys:
         metadata = claims.get(key)
@@ -95,6 +98,8 @@ def is_admin_claims(claims: dict[str, object]) -> bool:
             return True
 
     roles = claims.get("roles")
+    if isinstance(roles, str):
+        return roles == "admin"
     return isinstance(roles, list) and "admin" in roles
 
 

@@ -14,7 +14,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `npm run dev -- -H 127.0.0.1 -p ${smokePort}`,
+    command: `HOSTNAME=127.0.0.1 PORT=${smokePort} node .next/standalone/server.js`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

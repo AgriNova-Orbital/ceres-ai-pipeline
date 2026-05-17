@@ -72,6 +72,8 @@ def _resolve_checkpoint(
             candidates = [p]
         else:
             candidates = [summary_csv.parent / p, repo_root / p]
+        last_error: ValueError | None = None
+        valid_candidate_seen = False
         for candidate in candidates:
             try:
                 resolved = resolve_repo_path(
@@ -80,9 +82,13 @@ def _resolve_checkpoint(
                     field="checkpoint_path",
                 )
             except ValueError as e:
-                raise SystemExit(str(e)) from e
+                last_error = e
+                continue
+            valid_candidate_seen = True
             if resolved.exists():
                 return resolved
+        if last_error is not None and not valid_candidate_seen:
+            raise SystemExit(str(last_error)) from last_error
         raise SystemExit(f"checkpoint not found: {ckpt_str}")
 
     if p.is_absolute() and p.exists():

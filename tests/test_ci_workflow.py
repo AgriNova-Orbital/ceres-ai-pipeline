@@ -42,3 +42,11 @@ def test_ci_workflow_runs_required_verification_gates() -> None:
         "docker compose --profile dev --profile beta --profile release config --quiet"
         in workflow
     )
+
+
+def test_playwright_smoke_uses_standalone_production_server() -> None:
+    config = (ROOT / "frontend" / "playwright.config.ts").read_text(encoding="utf-8")
+
+    assert "node .next/standalone/server.js" in config
+    assert "npm run start" not in config
+    assert "npm run dev" not in config

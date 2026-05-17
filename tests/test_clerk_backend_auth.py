@@ -45,6 +45,17 @@ def test_production_startup_requires_webui_secret_key(monkeypatch, tmp_path: Pat
         create_app(repo_root=tmp_path)
 
 
+def test_required_clerk_auth_startup_requires_webui_secret_key(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setenv("APP_REQUIRE_CLERK_AUTH", "true")
+    monkeypatch.delenv("WEBUI_SECRET_KEY", raising=False)
+
+    from apps.wheat_risk_webui import create_app
+
+    with pytest.raises(RuntimeError, match="WEBUI_SECRET_KEY"):
+        create_app(repo_root=tmp_path)
+
+
 def test_non_production_startup_keeps_random_secret_fallback(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("FLASK_ENV", "development")
     monkeypatch.delenv("WEBUI_SECRET_KEY", raising=False)
@@ -76,6 +87,7 @@ def test_clerk_auth_required_rejects_non_truthy_values(monkeypatch, falsey_value
 
 def test_required_clerk_auth_returns_503_when_not_configured(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("APP_REQUIRE_CLERK_AUTH", "true")
+    monkeypatch.setenv("WEBUI_SECRET_KEY", "test-secret")
     monkeypatch.delenv("CLERK_JWT_ISSUER", raising=False)
 
     from apps.wheat_risk_webui import create_app
@@ -147,6 +159,7 @@ def test_legacy_password_auth_api_fails_closed_when_clerk_is_required_but_missin
     monkeypatch, tmp_path: Path, method: str, path: str
 ):
     monkeypatch.setenv("APP_REQUIRE_CLERK_AUTH", "true")
+    monkeypatch.setenv("WEBUI_SECRET_KEY", "test-secret")
     monkeypatch.delenv("CLERK_JWT_ISSUER", raising=False)
 
     from apps.wheat_risk_webui import create_app
@@ -275,6 +288,8 @@ def test_api_admin_rejects_authenticated_non_admin_clerk_user(
         {"sub": "user_clerk_123", "public_metadata": {"role": "admin"}},
         {"sub": "user_clerk_123", "private_metadata": {"role": "admin"}},
         {"sub": "user_clerk_123", "roles": ["member", "admin"]},
+        {"sub": "user_clerk_123", "role": "admin"},
+        {"sub": "user_clerk_123", "org_role": "admin"},
     ],
 )
 def test_clerk_admin_role_is_detected_from_supported_claims(claims: dict[str, object]):

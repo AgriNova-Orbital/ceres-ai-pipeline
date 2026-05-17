@@ -9,10 +9,7 @@ __pycache__/
 *.so
 
 # Environment
-.env
 .env*
-.env.bak
-.env.example
 .venv
 venv/
 ENV/

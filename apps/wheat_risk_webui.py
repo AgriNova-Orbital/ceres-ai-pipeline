@@ -211,11 +211,20 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
         static_folder=str(app_root / "static"),
     )
     configured_secret_key = os.environ.get("WEBUI_SECRET_KEY", "").strip()
+    auth_required = os.environ.get("APP_REQUIRE_CLERK_AUTH", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if (
         os.environ.get("FLASK_ENV", "").strip().lower() == "production"
-        and not configured_secret_key
-    ):
-        raise RuntimeError("WEBUI_SECRET_KEY is required when FLASK_ENV=production")
+        or auth_required
+    ) and not configured_secret_key:
+        raise RuntimeError(
+            "WEBUI_SECRET_KEY is required when FLASK_ENV=production "
+            "or APP_REQUIRE_CLERK_AUTH=true"
+        )
     secret_key = configured_secret_key or os.urandom(32).hex()
     app.config["SECRET_KEY"] = secret_key
     app.config["REPO_ROOT"] = root

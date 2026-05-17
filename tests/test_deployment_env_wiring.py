@@ -74,6 +74,11 @@ def test_dockerignore_excludes_local_secret_and_cache_artifacts() -> None:
     for pattern in (".cache/", ".env*", "client_secret_*.json", "oauth_token*.json"):
         assert pattern in dockerignore
 
+    assert dockerignore.count(".env*") == 1
+    assert ".env\n" not in dockerignore
+    assert ".env.bak" not in dockerignore
+    assert ".env.example" not in dockerignore
+
 
 def test_compose_binds_redis_to_loopback_only() -> None:
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")

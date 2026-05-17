@@ -100,3 +100,35 @@ def test_run_evaluation_rejects_index_rows_outside_repo_when_repo_root_set(
             levels=[1],
             repo_root=repo_root,
         )
+
+
+def test_resolve_checkpoint_falls_back_after_invalid_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from modules.services import evaluation_service
+
+    repo_root = tmp_path / "repo"
+    summary_csv = repo_root / "runs" / "summary.csv"
+    checkpoint_path = repo_root / "model.pt"
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_csv.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_path.write_bytes(b"checkpoint")
+
+    calls: list[Path] = []
+
+    def fake_resolve_repo_path(root, path_like, *, field, base=None):
+        calls.append(Path(path_like))
+        if len(calls) == 1:
+            raise ValueError("first candidate outside repo")
+        return checkpoint_path
+
+    monkeypatch.setattr(evaluation_service, "resolve_repo_path", fake_resolve_repo_path)
+
+    resolved = evaluation_service._resolve_checkpoint(
+        "model.pt",
+        summary_csv,
+        repo_root=repo_root,
+    )
+
+    assert resolved == checkpoint_path
+    assert len(calls) == 2
