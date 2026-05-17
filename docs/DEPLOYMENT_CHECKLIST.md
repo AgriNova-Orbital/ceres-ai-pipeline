@@ -12,14 +12,15 @@ Use this checklist before deploying Ceres AI Pipeline to a shared environment.
 
 ## 2. Secrets and Auth
 
-- [ ] Create/rotate Google OAuth client credentials.
+- [ ] Create/rotate Google OAuth client credentials for Drive/Earth Engine access.
 - [ ] Register redirect URIs:
   - [ ] `http://127.0.0.1:5055/auth/callback` (local)
   - [ ] production/staging callback URI if using a real host
 - [ ] Store OAuth client secret outside git.
 - [ ] Verify `client_secret_*.json` and token files remain ignored by git.
 - [ ] Set `GOOGLE_OAUTH_CLIENT_SECRET_FILE` or place `client_secret_*.json` at repo root.
-- [ ] If deploying publicly, set a strong non-dev `SECRET_KEY`.
+- [ ] If deploying the release profile, set a strong `WEBUI_SECRET_KEY`.
+- [ ] Set `APP_REQUIRE_CLERK_AUTH=true`, `CLERK_JWT_ISSUER`, and `CLERK_JWT_AUDIENCE` for Clerk-backed release auth.
 
 ## 3. Queue / Background Jobs
 
@@ -35,8 +36,8 @@ Use this checklist before deploying Ceres AI Pipeline to a shared environment.
 ## 4. WebUI Validation
 
 - [ ] Open `/` and verify landing page renders when logged out.
-- [ ] Click `Login with Google` and verify callback succeeds.
-- [ ] Confirm authenticated dashboard loads.
+- [ ] Open a protected route and verify unauthenticated users are sent to Clerk sign-in.
+- [ ] Sign in through Clerk and confirm authenticated dashboard loads.
 - [ ] Confirm scanned dropdowns populate for:
   - [ ] raw dataset directories
   - [ ] raw GeoTIFF preview files

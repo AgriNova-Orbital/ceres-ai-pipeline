@@ -41,6 +41,7 @@ from apps.api_admin import register_admin_api
 from apps.api_runs import register_runs_api
 from apps.api_oauth import register_oauth_api
 from modules.observability import init_sentry
+from modules.path_safety import normalize_repo_path
 
 
 _FAKE_REDIS_SERVER = None
@@ -918,7 +919,15 @@ def create_app(repo_root: Path | str | None = None) -> Flask:
             if isinstance(raw_file_ids, list)
             else []
         )
-        save_dir = str(data.get("save_dir", "data/raw/drive_download")).strip()
+        try:
+            save_dir = normalize_repo_path(
+                app.config["REPO_ROOT"],
+                data.get("save_dir"),
+                "data/raw/drive_download",
+                field="save_dir",
+            )
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
 
         if not folder_id and not file_ids:
             return jsonify({"error": "folder_id or file_ids required"}), 400

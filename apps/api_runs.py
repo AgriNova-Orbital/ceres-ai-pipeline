@@ -7,6 +7,8 @@ from typing import Any
 
 from flask import Blueprint, g, jsonify, request, session
 
+from modules.path_safety import normalize_repo_path, normalize_repo_template_path
+
 
 def register_runs_api(
     app, sqlite_store, redis_conn, job_history, get_queue_conn, get_raw_data_dirs
@@ -119,22 +121,12 @@ def register_runs_api(
     def _normalize_path(
         root: Path, path_like: str | None, default: str, *, field: str = "path"
     ) -> str:
-        if path_like is None:
-            raw = default
-        elif not isinstance(path_like, str):
-            raise ValueError(f"{field} must be a string path")
-        else:
-            raw = path_like.strip() or default
-        p = Path(raw)
-        if p.is_absolute():
-            raise ValueError(f"{field} must be relative to the repository root")
-        candidate = root / raw
-        resolved = candidate.resolve(strict=False)
-        try:
-            resolved.relative_to(root.resolve(strict=False))
-        except ValueError as e:
-            raise ValueError(f"{field} must stay within the repository root") from e
-        return str(resolved)
+        return normalize_repo_path(root, path_like, default, field=field)
+
+    def _normalize_template_path(
+        root: Path, path_like: str | None, default: str, *, field: str = "path"
+    ) -> str:
+        return normalize_repo_template_path(root, path_like, default, field=field)
 
     def _approved_train_script(root: Path, train_script: Any) -> Path:
         default = "scripts/train_wheat_risk_lstm.py"
@@ -262,10 +254,14 @@ def register_runs_api(
         if action == "dry_run":
             try:
                 train_script = _approved_train_script(root, data.get("train_script"))
+                runs_dir = Path(
+                    _normalize_path(root, data.get("runs_dir"), "runs", field="runs_dir")
+                )
             except ValueError as e:
                 return jsonify(error=str(e)), 400
             payload = {
                 "user_id": _current_user_id(),
+                "repo_root": root,
                 "levels": _parse_int_list(
                     str(data.get("levels", "1,2,4")), field="levels"
                 ),
@@ -275,7 +271,7 @@ def register_runs_api(
                 "base_patch": int(data.get("base_patch", 64)),
                 "dry_run": True,
                 "execute_train": False,
-                "runs_dir": Path(str(data.get("runs_dir", "runs"))),
+                "runs_dir": runs_dir,
                 "index_csv": None,
                 "index_csv_template": None,
                 "root_dir": None,
@@ -298,10 +294,26 @@ def register_runs_api(
         if action == "run_matrix":
             try:
                 train_script = _approved_train_script(root, data.get("train_script"))
+                runs_dir = Path(
+                    _normalize_path(root, data.get("runs_dir"), "runs", field="runs_dir")
+                )
+                index_csv_template = _normalize_template_path(
+                    root,
+                    data.get("index_csv_template"),
+                    "./data/wheat_risk/staged/L{level}/index.csv",
+                    field="index_csv_template",
+                )
+                root_dir_template = _normalize_template_path(
+                    root,
+                    data.get("root_dir_template"),
+                    "./data/wheat_risk/staged/L{level}",
+                    field="root_dir_template",
+                )
             except ValueError as e:
                 return jsonify(error=str(e)), 400
             payload = {
                 "user_id": _current_user_id(),
+                "repo_root": root,
                 "levels": _parse_int_list(
                     str(data.get("levels", "1,2,4")), field="levels"
                 ),
@@ -311,18 +323,11 @@ def register_runs_api(
                 "base_patch": int(data.get("base_patch", 64)),
                 "dry_run": bool(data.get("dry_run", False)),
                 "execute_train": True,
-                "runs_dir": Path(str(data.get("runs_dir", "runs"))),
+                "runs_dir": runs_dir,
                 "index_csv": None,
-                "index_csv_template": str(
-                    data.get(
-                        "index_csv_template",
-                        "./data/wheat_risk/staged/L{level}/index.csv",
-                    )
-                ),
+                "index_csv_template": index_csv_template,
                 "root_dir": None,
-                "root_dir_template": str(
-                    data.get("root_dir_template", "./data/wheat_risk/staged/L{level}")
-                ),
+                "root_dir_template": root_dir_template,
                 "train_script": train_script,
                 "epochs": int(data.get("epochs", 10)),
                 "batch_size": int(data.get("batch_size", 8)),
@@ -347,25 +352,54 @@ def register_runs_api(
     @api_runs.post("/api/run/eval")
     def api_run_eval():
         data = request.get_json(silent=True) or {}
+        root = Path(app.config["REPO_ROOT"])
+        try:
+            summary_csv = Path(
+                _normalize_path(
+                    root,
+                    data.get("summary_csv"),
+                    "runs/staged_final/summary.csv",
+                    field="summary_csv",
+                )
+            )
+            index_csv_template = _normalize_template_path(
+                root,
+                data.get("index_csv_template"),
+                "./data/wheat_risk/staged/L{level}/index.csv",
+                field="index_csv_template",
+            )
+            root_dir_template = _normalize_template_path(
+                root,
+                data.get("root_dir_template"),
+                "./data/wheat_risk/staged/L{level}",
+                field="root_dir_template",
+            )
+            output_csv = Path(
+                _normalize_path(
+                    root,
+                    data.get("output_csv"),
+                    "runs/staged_final/eval_metrics.csv",
+                    field="output_csv",
+                )
+            )
+            best_json = Path(
+                _normalize_path(
+                    root,
+                    data.get("best_json"),
+                    "runs/staged_final/best_model.json",
+                    field="best_json",
+                )
+            )
+        except ValueError as e:
+            return jsonify(error=str(e)), 400
         payload = {
             "user_id": _current_user_id(),
-            "summary_csv": Path(
-                str(data.get("summary_csv", "runs/staged_final/summary.csv"))
-            ),
-            "index_csv_template": str(
-                data.get(
-                    "index_csv_template", "./data/wheat_risk/staged/L{level}/index.csv"
-                )
-            ),
-            "root_dir_template": str(
-                data.get("root_dir_template", "./data/wheat_risk/staged/L{level}")
-            ),
-            "output_csv": Path(
-                str(data.get("output_csv", "runs/staged_final/eval_metrics.csv"))
-            ),
-            "best_json": Path(
-                str(data.get("best_json", "runs/staged_final/best_model.json"))
-            ),
+            "repo_root": root,
+            "summary_csv": summary_csv,
+            "index_csv_template": index_csv_template,
+            "root_dir_template": root_dir_template,
+            "output_csv": output_csv,
+            "best_json": best_json,
             "label_threshold": float(data.get("label_threshold", 0.5)),
             "precision_floor": float(data.get("precision_floor", 0.35)),
             "pred_threshold_min": float(data.get("pred_threshold_min", 0.05)),

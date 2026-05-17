@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 
+from modules.path_safety import resolve_repo_path
 from modules.wheat_risk.dataset import WheatRiskNpzSequenceDataset
 from modules.wheat_risk.metrics import (
     binary_metrics_from_probs,
@@ -62,8 +63,28 @@ def _write_eval_subset(index_csv: Path, selected_paths: list[str]) -> None:
             w.writerow({"npz_path": p})
 
 
-def _resolve_checkpoint(ckpt_str: str, summary_csv: Path) -> Path:
+def _resolve_checkpoint(
+    ckpt_str: str, summary_csv: Path, *, repo_root: Path | None = None
+) -> Path:
     p = Path(ckpt_str)
+    if repo_root is not None:
+        if p.is_absolute():
+            candidates = [p]
+        else:
+            candidates = [summary_csv.parent / p, repo_root / p]
+        for candidate in candidates:
+            try:
+                resolved = resolve_repo_path(
+                    repo_root,
+                    candidate,
+                    field="checkpoint_path",
+                )
+            except ValueError as e:
+                raise SystemExit(str(e)) from e
+            if resolved.exists():
+                return resolved
+        raise SystemExit(f"checkpoint not found: {ckpt_str}")
+
     if p.is_absolute() and p.exists():
         return p
     p1 = Path.cwd() / p
@@ -180,6 +201,7 @@ def run_evaluation(
     embed_dim: int = 64,
     hidden_dim: int = 128,
     levels: list[int] | None = None,
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     summary_rows = _read_summary_rows(summary_csv)
     keep_levels = set(levels) if levels is not None else None
@@ -205,6 +227,21 @@ def run_evaluation(
             raise SystemExit(f"Index CSV for level {level} not found: {index_csv}")
 
         all_paths = _read_index_npz_paths(index_csv)
+        if repo_root is not None:
+            try:
+                all_paths = [
+                    str(
+                        resolve_repo_path(
+                            repo_root,
+                            p,
+                            field="npz_path",
+                            base=root_dir,
+                        )
+                    )
+                    for p in all_paths
+                ]
+            except ValueError as e:
+                raise SystemExit(str(e)) from e
         n_total = len(all_paths)
         n_eval = min(n_total, max(int(eval_min), int(round(n_total * eval_ratio))))
         rng = np.random.default_rng(int(seed) + int(level))
@@ -226,7 +263,11 @@ def run_evaluation(
             continue
 
         eval_index, root_dir = eval_index_by_level[level]
-        ckpt = _resolve_checkpoint(r["checkpoint_path"], summary_csv)
+        ckpt = _resolve_checkpoint(
+            r["checkpoint_path"],
+            summary_csv,
+            repo_root=repo_root,
+        )
 
         metrics = _evaluate_checkpoint(
             checkpoint_path=ckpt,

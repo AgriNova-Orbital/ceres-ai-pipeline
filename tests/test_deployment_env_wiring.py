@@ -75,6 +75,14 @@ def test_dockerignore_excludes_local_secret_and_cache_artifacts() -> None:
         assert pattern in dockerignore
 
 
+def test_compose_binds_redis_to_loopback_only() -> None:
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    redis = _service_block(compose, "redis")
+
+    assert '      - "127.0.0.1:6379:6379"' in redis
+    assert '      - "6379:6379"' not in redis
+
+
 def test_env_example_documents_clerk_jwks_cache_ttl() -> None:
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 

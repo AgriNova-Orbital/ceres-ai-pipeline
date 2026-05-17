@@ -282,6 +282,14 @@ def test_api_run_train_run_matrix_uses_task_run_matrix(
     assert payload["levels"] == [1, 2]
     assert payload["steps"] == [100, 500]
     assert payload["dry_run"] is False
+    assert payload["repo_root"] == tmp_path
+    assert payload["runs_dir"] == tmp_path / "runs"
+    assert payload["index_csv_template"] == str(
+        tmp_path / "data" / "wheat_risk" / "staged" / "L{level}" / "index.csv"
+    )
+    assert payload["root_dir_template"] == str(
+        tmp_path / "data" / "wheat_risk" / "staged" / "L{level}"
+    )
     assert payload["train_script"] == tmp_path / "scripts" / "train_wheat_risk_lstm.py"
 
 
@@ -369,6 +377,46 @@ def test_api_run_train_execute_train_alias_maps_to_run_matrix(
     payload = kwargs["args"][0]
     assert payload["execute_train"] is True
     assert payload["dry_run"] is False
+    assert payload["repo_root"] == tmp_path
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("runs_dir", "/tmp/outside-repo"),
+        ("index_csv_template", "../outside-repo/L{level}/index.csv"),
+        ("root_dir_template", "/tmp/outside-repo/L{level}"),
+    ],
+)
+def test_api_run_train_rejects_unsafe_matrix_paths(
+    monkeypatch, tmp_path: Path, field: str, value: str
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-api-unsafe-train"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login_legacy_user(client)
+
+    resp = client.post(
+        "/api/run/train",
+        json={
+            "action": "run_matrix",
+            "levels": "1",
+            "steps": "100",
+            field: value,
+        },
+    )
+
+    assert resp.status_code == 400
+    assert field in str(resp.get_json().get("error", ""))
+    mock_queue.enqueue.assert_not_called()
 
 
 def test_api_run_eval_uses_task_run_eval(monkeypatch, tmp_path: Path) -> None:
@@ -396,3 +444,49 @@ def test_api_run_eval_uses_task_run_eval(monkeypatch, tmp_path: Path) -> None:
     payload = kwargs["args"][0]
     assert payload["levels"] == [1, 2]
     assert payload["device"] == "cpu"
+    assert payload["repo_root"] == tmp_path
+    assert payload["summary_csv"] == tmp_path / "runs" / "staged_final" / "summary.csv"
+    assert payload["index_csv_template"] == str(
+        tmp_path / "data" / "wheat_risk" / "staged" / "L{level}" / "index.csv"
+    )
+    assert payload["root_dir_template"] == str(
+        tmp_path / "data" / "wheat_risk" / "staged" / "L{level}"
+    )
+    assert payload["output_csv"] == tmp_path / "runs" / "staged_final" / "eval_metrics.csv"
+    assert payload["best_json"] == tmp_path / "runs" / "staged_final" / "best_model.json"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("summary_csv", "/tmp/outside-repo/summary.csv"),
+        ("index_csv_template", "../outside-repo/L{level}/index.csv"),
+        ("root_dir_template", "/tmp/outside-repo/L{level}"),
+        ("output_csv", "../outside-repo/eval_metrics.csv"),
+        ("best_json", "/tmp/outside-repo/best_model.json"),
+    ],
+)
+def test_api_run_eval_rejects_unsafe_paths(
+    monkeypatch, tmp_path: Path, field: str, value: str
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-api-unsafe-eval"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login_legacy_user(client)
+
+    resp = client.post(
+        "/api/run/eval",
+        json={"levels": "1", field: value},
+    )
+
+    assert resp.status_code == 400
+    assert field in str(resp.get_json().get("error", ""))
+    mock_queue.enqueue.assert_not_called()

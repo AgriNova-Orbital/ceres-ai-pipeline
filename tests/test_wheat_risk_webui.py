@@ -285,8 +285,37 @@ def test_drive_download_accepts_json_payload(
     _, kwargs = mock_queue.enqueue.call_args
     job_kwargs = kwargs["args"][0]
     assert job_kwargs["file_ids"] == ["file-1", "file-2"]
-    assert job_kwargs["save_dir"] == "data/raw/drive_download"
+    assert job_kwargs["save_dir"] == str(
+        (tmp_path / "data/raw/drive_download").resolve(strict=False)
+    )
     assert job_kwargs["user_id"] == "uuid-user-123"
+
+
+@pytest.mark.parametrize("save_dir", ["/tmp/outside-repo", "../outside-repo"])
+def test_drive_download_rejects_unsafe_save_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, save_dir: str
+) -> None:
+    from apps.wheat_risk_webui import create_app
+
+    mock_queue = MagicMock()
+    mock_job = MagicMock()
+    mock_job.id = "job-drive-unsafe"
+    mock_queue.enqueue.return_value = mock_job
+    monkeypatch.setattr("apps.wheat_risk_webui.get_queue_conn", lambda: mock_queue)
+
+    app = create_app(repo_root=tmp_path)
+    _initialize_app(app, tmp_path)
+    client = app.test_client()
+    _login(client, app)
+
+    resp = client.post(
+        "/api/drive/download",
+        json={"file_ids": ["file-1"], "save_dir": save_dir},
+    )
+
+    assert resp.status_code == 400
+    assert "save_dir" in str(resp.get_json().get("error", ""))
+    mock_queue.enqueue.assert_not_called()
 
 
 def test_drive_list_uses_current_user_token_not_latest_token(
