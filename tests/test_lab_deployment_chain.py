@@ -62,6 +62,18 @@ def test_ghcr_workflow_builds_immutable_api_and_frontend_images() -> None:
     assert ":latest" not in workflow
 
 
+def test_ghcr_workflow_passes_clerk_publishable_key_to_frontend_build_only() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ghcr-build.yml").read_text(encoding="utf-8")
+
+    api_step_start = workflow.index("name: Build and push API image")
+    frontend_step_start = workflow.index("name: Build and push frontend image")
+    api_step = workflow[api_step_start:frontend_step_start]
+    frontend_step = workflow[frontend_step_start:]
+
+    assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" not in api_step
+    assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" in frontend_step
+
+
 def test_lab_env_templates_are_secret_free_and_cover_portainer_targets() -> None:
     portainer_env = (ROOT / "deploy" / "lab" / "portainer.env.example").read_text(encoding="utf-8")
     stack_env = (ROOT / "deploy" / "lab" / "stack.env.example").read_text(encoding="utf-8")

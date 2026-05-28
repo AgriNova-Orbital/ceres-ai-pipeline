@@ -39,7 +39,6 @@ jobs:
           tags: ghcr.io/agrinova-orbital/ceres-api:sha-${{ env.SHORT_SHA }}
           build-args: |
             APP_VERSION=${{ env.APP_VERSION }}
-            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
@@ -50,3 +49,4 @@ jobs:
           tags: ghcr.io/agrinova-orbital/ceres-frontend:sha-${{ env.SHORT_SHA }}
           build-args: |
             APP_VERSION=${{ env.APP_VERSION }}
+            NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
