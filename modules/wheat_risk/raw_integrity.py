@@ -15,6 +15,7 @@ RAW_TILE_RE = re.compile(
     r"(?:-(?P<row>\d+)-(?P<col>\d+))?\.tif(?:f)?$",
     re.IGNORECASE,
 )
+BATCH_CSV_RE = re.compile(r"^batch_(?P<number>\d{6})\.csv$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,12 @@ class RawScanRecord:
 
 RAW_SCAN_COLUMNS = tuple(field.name for field in fields(RawScanRecord))
 BAD_STATUSES = {"open_failed", "metadata_mismatch", "read_sample_failed", "missing", "too_small"}
+EXPECTED_WIDTH = 9984
+EXPECTED_HEIGHT = 9984
+EXPECTED_BAND_COUNT = 11
+EXPECTED_DTYPE = "float32"
+EXPECTED_CRS = "EPSG:4326"
+EXPECTED_NODATA = -32768.0
 CURATED_COLUMNS = (
     "original_relative_path",
     "source_relative_path",
@@ -115,6 +122,33 @@ def file_modified_time(path: Path) -> str:
     return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(microsecond=0).isoformat()
 
 
+def metadata_mismatch_errors(parsed: RawTileName | None, dataset: object) -> list[str]:
+    errors: list[str] = []
+    if parsed is None:
+        errors.append("filename does not match fr_wheat_feat_YYYYWww-row-col.tif")
+
+    width = int(getattr(dataset, "width", 0))
+    height = int(getattr(dataset, "height", 0))
+    band_count = int(getattr(dataset, "count", 0))
+    dtypes = tuple(str(dtype) for dtype in getattr(dataset, "dtypes", ()))
+    crs = str(getattr(dataset, "crs", "") or "")
+    nodata = getattr(dataset, "nodata", None)
+
+    if width != EXPECTED_WIDTH:
+        errors.append(f"width={width} expected {EXPECTED_WIDTH}")
+    if height != EXPECTED_HEIGHT:
+        errors.append(f"height={height} expected {EXPECTED_HEIGHT}")
+    if band_count != EXPECTED_BAND_COUNT:
+        errors.append(f"band_count={band_count} expected {EXPECTED_BAND_COUNT}")
+    if len(dtypes) != EXPECTED_BAND_COUNT or any(dtype != EXPECTED_DTYPE for dtype in dtypes):
+        errors.append(f"dtypes={';'.join(dtypes)} expected {EXPECTED_DTYPE}x{EXPECTED_BAND_COUNT}")
+    if crs != EXPECTED_CRS:
+        errors.append(f"crs={crs or 'missing'} expected {EXPECTED_CRS}")
+    if nodata is None or float(nodata) != EXPECTED_NODATA:
+        errors.append(f"nodata={nodata} expected {EXPECTED_NODATA}")
+    return errors
+
+
 def default_rasterio_opener(path: Path):
     import rasterio
 
@@ -138,6 +172,30 @@ def scan_one_raw_file(
 
     try:
         with opener(path) as dataset:
+            width = int(dataset.width)
+            height = int(dataset.height)
+            band_count = int(dataset.count)
+            dtypes = ";".join(str(dtype) for dtype in dataset.dtypes)
+            crs = str(dataset.crs or "")
+            nodata = "" if dataset.nodata is None else str(dataset.nodata)
+            metadata_errors = metadata_mismatch_errors(parsed, dataset)
+            if metadata_errors:
+                return RawScanRecord(
+                    relative_path=rel,
+                    status="metadata_mismatch",
+                    size_bytes=size_bytes,
+                    modified_time=file_modified_time(path),
+                    week_key=parsed.week_key if parsed else "",
+                    tile_key=parsed.tile_key if parsed else "",
+                    width=width,
+                    height=height,
+                    band_count=band_count,
+                    dtypes=dtypes,
+                    crs=crs,
+                    nodata=nodata,
+                    error="; ".join(metadata_errors),
+                )
+
             read_sample_status = "not_checked"
             if read_sample:
                 try:
@@ -151,12 +209,12 @@ def scan_one_raw_file(
                         modified_time=file_modified_time(path),
                         week_key=parsed.week_key if parsed else "",
                         tile_key=parsed.tile_key if parsed else "",
-                        width=int(dataset.width),
-                        height=int(dataset.height),
-                        band_count=int(dataset.count),
-                        dtypes=";".join(str(dtype) for dtype in dataset.dtypes),
-                        crs=str(dataset.crs or ""),
-                        nodata="" if dataset.nodata is None else str(dataset.nodata),
+                        width=width,
+                        height=height,
+                        band_count=band_count,
+                        dtypes=dtypes,
+                        crs=crs,
+                        nodata=nodata,
                         read_sample_status="failed",
                         error=truncate_error(exc),
                     )
@@ -167,12 +225,12 @@ def scan_one_raw_file(
                 modified_time=file_modified_time(path),
                 week_key=parsed.week_key if parsed else "",
                 tile_key=parsed.tile_key if parsed else "",
-                width=int(dataset.width),
-                height=int(dataset.height),
-                band_count=int(dataset.count),
-                dtypes=";".join(str(dtype) for dtype in dataset.dtypes),
-                crs=str(dataset.crs or ""),
-                nodata="" if dataset.nodata is None else str(dataset.nodata),
+                width=width,
+                height=height,
+                band_count=band_count,
+                dtypes=dtypes,
+                crs=crs,
+                nodata=nodata,
                 read_sample_status=read_sample_status,
             )
     except Exception as exc:
@@ -204,6 +262,34 @@ def write_scan_csv(path: Path, records: list[RawScanRecord]) -> None:
         writer.writeheader()
         for record in records:
             writer.writerow({key: getattr(record, key) for key in RAW_SCAN_COLUMNS})
+
+
+def scan_record_from_csv_row(row: dict[str, str]) -> RawScanRecord:
+    values: dict[str, object] = {}
+    for column in RAW_SCAN_COLUMNS:
+        value = row.get(column, "")
+        if column in {"size_bytes", "width", "height", "band_count"}:
+            values[column] = int(value or 0)
+        else:
+            values[column] = value
+    return RawScanRecord(**values)  # type: ignore[arg-type]
+
+
+def load_scan_records(batch_dir: Path) -> list[RawScanRecord]:
+    records: list[RawScanRecord] = []
+    for csv_path in sorted(batch_dir.glob("batch_*.csv")):
+        with csv_path.open(newline="", encoding="utf-8") as handle:
+            records.extend(scan_record_from_csv_row(row) for row in csv.DictReader(handle))
+    return records
+
+
+def next_batch_path(batch_dir: Path) -> Path:
+    highest = 0
+    for csv_path in batch_dir.glob("batch_*.csv"):
+        match = BATCH_CSV_RE.match(csv_path.name)
+        if match:
+            highest = max(highest, int(match.group("number")))
+    return batch_dir / f"batch_{highest + 1:06d}.csv"
 
 
 def build_repair_candidates(

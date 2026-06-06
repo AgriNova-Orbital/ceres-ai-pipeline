@@ -10,6 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from modules.wheat_risk.raw_integrity import (
     build_repair_candidates,
     choose_batch,
+    load_scan_records,
+    next_batch_path,
     scan_raw_batch,
     write_dict_csv,
     write_scan_csv,
@@ -48,12 +50,12 @@ def main(argv: list[str] | None = None) -> int:
         completed_relative_paths=completed,
         batch_size=args.batch_size,
     )
-    batch_number = len(list(batch_dir.glob("batch_*.csv"))) + 1
     records = scan_raw_batch(selected, raw_root=args.raw_root, read_sample=args.read_sample)
-    batch_path = batch_dir / f"batch_{batch_number:06d}.csv"
+    batch_path = next_batch_path(batch_dir)
     write_scan_csv(batch_path, records)
-    write_summary_json(args.report_root / "summary.json", records)
-    repair_candidates = build_repair_candidates(records, week_failure_threshold=args.week_failure_threshold)
+    all_records = load_scan_records(batch_dir)
+    write_summary_json(args.report_root / "summary.json", all_records)
+    repair_candidates = build_repair_candidates(all_records, week_failure_threshold=args.week_failure_threshold)
     write_dict_csv(
         args.report_root / "repair_candidates.csv",
         repair_candidates,

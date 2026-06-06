@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import modules.wheat_risk.raw_integrity as raw_integrity
 from modules.wheat_risk.raw_integrity import (
     RawScanRecord,
     build_curated_manifest,
@@ -14,6 +15,7 @@ from modules.wheat_risk.raw_integrity import (
     parse_raw_tile_name,
     plan_kaggle_shards,
     scan_raw_batch,
+    scan_one_raw_file,
     status_counts,
     write_dict_csv,
     write_scan_csv,
@@ -42,6 +44,10 @@ class FakeDataset:
 class SampleReadFailDataset(FakeDataset):
     def read(self, indexes, window=None):
         raise RuntimeError("sample window unavailable")
+
+
+class InvalidMetadataDataset(FakeDataset):
+    count = 10
 
 
 def test_parse_raw_tile_name_extracts_week_offsets_and_tile_key() -> None:
@@ -118,6 +124,20 @@ def test_scan_raw_batch_marks_sample_read_failures_separately(tmp_path: Path) ->
     assert "sample window unavailable" in records[0].error
 
 
+def test_scan_one_raw_file_marks_invalid_raw_metadata_as_mismatch(tmp_path: Path) -> None:
+    raw_root = tmp_path / "raw"
+    raw_root.mkdir()
+    path = raw_root / "not_a_raw_tile.tif"
+    path.write_text("ok", encoding="utf-8")
+
+    record = scan_one_raw_file(path, raw_root=raw_root, opener=lambda _path: InvalidMetadataDataset())
+
+    assert record.status == "metadata_mismatch"
+    assert record.band_count == 10
+    assert "filename" in record.error
+    assert "band_count" in record.error
+
+
 def test_write_scan_csv_writes_buffered_rows_once(tmp_path: Path) -> None:
     csv_path = tmp_path / "batch_000001.csv"
     records = [
@@ -130,6 +150,24 @@ def test_write_scan_csv_writes_buffered_rows_once(tmp_path: Path) -> None:
     with csv_path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert [row["relative_path"] for row in rows] == ["a.tif", "b.tif"]
+
+
+def test_load_scan_records_combines_existing_batch_csvs(tmp_path: Path) -> None:
+    batch_dir = tmp_path / "batches"
+    write_scan_csv(batch_dir / "batch_000001.csv", [RawScanRecord(relative_path="a.tif", status="open_failed")])
+    write_scan_csv(batch_dir / "batch_000002.csv", [RawScanRecord(relative_path="b.tif", status="ok")])
+
+    records = raw_integrity.load_scan_records(batch_dir)
+
+    assert [(record.relative_path, record.status) for record in records] == [("a.tif", "open_failed"), ("b.tif", "ok")]
+
+
+def test_next_batch_path_uses_highest_existing_suffix(tmp_path: Path) -> None:
+    batch_dir = tmp_path / "batches"
+    write_scan_csv(batch_dir / "batch_000001.csv", [RawScanRecord(relative_path="a.tif", status="ok")])
+    write_scan_csv(batch_dir / "batch_000003.csv", [RawScanRecord(relative_path="c.tif", status="ok")])
+
+    assert raw_integrity.next_batch_path(batch_dir) == batch_dir / "batch_000004.csv"
 
 
 def test_build_repair_candidates_includes_known_corrupt_tile() -> None:

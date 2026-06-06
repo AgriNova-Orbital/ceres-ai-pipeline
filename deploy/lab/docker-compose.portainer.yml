@@ -12,6 +12,7 @@ services:
 
   web:
     image: ${CERES_API_IMAGE}
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     restart: unless-stopped
     depends_on:
       redis:
@@ -66,6 +67,7 @@ services:
 
   worker:
     image: ${CERES_API_IMAGE}
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
     restart: unless-stopped
     command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
     depends_on:

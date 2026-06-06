@@ -22,6 +22,9 @@ def test_lab_deployment_runbook_documents_operational_gates() -> None:
         "rollback",
         "previous known-good image tag",
         "Do not deploy `latest`",
+        "LOCAL_UID",
+        "LOCAL_GID",
+        "chown -R",
         "80%",
         "90%",
         "GitHub self-hosted runner",
@@ -56,6 +59,10 @@ def test_ghcr_workflow_builds_immutable_api_and_frontend_images() -> None:
         "file: ./frontend/Dockerfile",
         "APP_VERSION=${{ env.APP_VERSION }}",
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}",
+        "NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}",
+        "NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${{ vars.NEXT_PUBLIC_SENTRY_ENABLE_LOGS }}",
+        "NEXT_PUBLIC_SENTRY_ENVIRONMENT=${{ vars.NEXT_PUBLIC_SENTRY_ENVIRONMENT }}",
+        "NEXT_PUBLIC_SENTRY_RELEASE=${{ vars.NEXT_PUBLIC_SENTRY_RELEASE }}",
     ):
         assert required in workflow
 
@@ -72,6 +79,24 @@ def test_ghcr_workflow_passes_clerk_publishable_key_to_frontend_build_only() -> 
 
     assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" not in api_step
     assert "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" in frontend_step
+
+
+def test_ghcr_workflow_passes_public_sentry_values_to_frontend_build_only() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ghcr-build.yml").read_text(encoding="utf-8")
+
+    api_step_start = workflow.index("name: Build and push API image")
+    frontend_step_start = workflow.index("name: Build and push frontend image")
+    api_step = workflow[api_step_start:frontend_step_start]
+    frontend_step = workflow[frontend_step_start:]
+
+    for arg in (
+        "NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}",
+        "NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${{ vars.NEXT_PUBLIC_SENTRY_ENABLE_LOGS }}",
+        "NEXT_PUBLIC_SENTRY_ENVIRONMENT=${{ vars.NEXT_PUBLIC_SENTRY_ENVIRONMENT }}",
+        "NEXT_PUBLIC_SENTRY_RELEASE=${{ vars.NEXT_PUBLIC_SENTRY_RELEASE }}",
+    ):
+        assert arg not in api_step
+        assert arg in frontend_step
 
 
 def test_lab_env_templates_are_secret_free_and_cover_portainer_targets() -> None:
@@ -94,6 +119,8 @@ def test_lab_env_templates_are_secret_free_and_cover_portainer_targets() -> None
         "CLERK_JWT_ISSUER=",
         "CLERK_JWT_AUDIENCE=",
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=",
+        "LOCAL_UID=1000",
+        "LOCAL_GID=1000",
         "CERES_API_IMAGE=ghcr.io/agrinova-orbital/ceres-api:sha-",
         "CERES_FRONTEND_IMAGE=ghcr.io/agrinova-orbital/ceres-frontend:sha-",
         "APP_VERSION=0.2.0",
@@ -126,6 +153,19 @@ def test_portainer_stack_template_uses_images_not_build_contexts() -> None:
     assert "APP_REQUIRE_CLERK_AUTH=true" in stack
     assert "build:" not in stack
     assert ":latest" not in stack
+
+
+def test_portainer_stack_runs_api_and_worker_as_configured_lab_user() -> None:
+    stack = (ROOT / "deploy" / "lab" / "docker-compose.portainer.yml").read_text(encoding="utf-8")
+
+    web_start = stack.index("  web:")
+    worker_start = stack.index("  worker:")
+    frontend_start = stack.index("  frontend:")
+    web_service = stack[web_start:worker_start]
+    worker_service = stack[worker_start:frontend_start]
+
+    assert 'user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"' in web_service
+    assert 'user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"' in worker_service
 
 
 def test_portainer_deploy_dry_run_outputs_redacted_update_payload(tmp_path: Path) -> None:

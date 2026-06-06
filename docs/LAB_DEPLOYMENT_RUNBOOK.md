@@ -27,6 +27,13 @@ The initial workflow can run on GitHub-hosted Linux runners. When the lab GitHub
 
 Use `scripts/deploy_portainer_stack.py` from the lab VM. Keep `deploy/lab/portainer.env` and `deploy/lab/stack.env` private on the VM. The script reads Portainer credentials from `--env-file` and stack runtime values from `--stack-env-file`.
 
+Before the first stack update, create the host bind-mount directories and make their ownership match `LOCAL_UID` and `LOCAL_GID` from `deploy/lab/stack.env` so the API and worker can write state, data, runs, reports, and logs without running as root:
+
+```bash
+sudo mkdir -p /srv/ceres/{state,data,runs,reports,logs}
+sudo chown -R "$LOCAL_UID:$LOCAL_GID" /srv/ceres
+```
+
 1. Confirm the target image tags exist in GHCR.
 2. Update `ceres-staging` through the Portainer API with the API and frontend tags.
 3. Run staging smoke checks against the internal frontend and `/healthz` API endpoint.
