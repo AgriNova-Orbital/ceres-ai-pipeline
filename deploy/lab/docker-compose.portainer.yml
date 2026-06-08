@@ -1,0 +1,127 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    image: ${CERES_API_IMAGE}
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
+      - PYTHONUNBUFFERED=1
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?WEBUI_SECRET_KEY is required}
+      - APP_REQUIRE_CLERK_AUTH=true
+      - RQ_LOG_LEVEL=WARNING
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-staging}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
+      - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
+      - SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}
+      - SENTRY_LOG_LEVEL=${SENTRY_LOG_LEVEL:-INFO}
+      - SENTRY_BREADCRUMB_LEVEL=${SENTRY_BREADCRUMB_LEVEL:-INFO}
+      - SENTRY_EVENT_LEVEL=${SENTRY_EVENT_LEVEL:-ERROR}
+      - APP_LOG_LEVEL=${APP_LOG_LEVEL:-INFO}
+      - CLERK_JWT_ISSUER=${CLERK_JWT_ISSUER:?CLERK_JWT_ISSUER is required}
+      - CLERK_JWKS_URL=${CLERK_JWKS_URL:-}
+      - CLERK_JWT_AUDIENCE=${CLERK_JWT_AUDIENCE:?CLERK_JWT_AUDIENCE is required}
+      - CLERK_JWKS_CACHE_TTL_SECONDS=${CLERK_JWKS_CACHE_TTL_SECONDS:-300}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME:-Ceres API Staging}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
+    ports:
+      - "${CERES_API_HOST_BIND:-127.0.0.1:5255}:5055"
+    volumes:
+      - ${CERES_DATA_ROOT:-/srv/ceres}/state:/app/state
+      - ${CERES_DATA_ROOT:-/srv/ceres}/data:/app/data
+      - ${CERES_DATA_ROOT:-/srv/ceres}/runs:/app/runs
+      - ${CERES_DATA_ROOT:-/srv/ceres}/reports:/app/reports
+      - ${CERES_DATA_ROOT:-/srv/ceres}/logs:/app/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5055/healthz', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    image: ${CERES_API_IMAGE}
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "modules.observability", "python", "-m", "modules.jobs.worker", "redis://redis:6379/0"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - APP_DB_PATH=/app/state/app.db
+      - REDIS_URL=redis://redis:6379/0
+      - APP_VERSION=${APP_VERSION:-0.2.0}
+      - PYTHONUNBUFFERED=1
+      - RQ_LOG_LEVEL=WARNING
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-staging}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0}
+      - SENTRY_PROFILES_SAMPLE_RATE=${SENTRY_PROFILES_SAMPLE_RATE:-0}
+      - SENTRY_SEND_DEFAULT_PII=${SENTRY_SEND_DEFAULT_PII:-false}
+      - SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}
+      - SENTRY_LOG_LEVEL=${SENTRY_LOG_LEVEL:-INFO}
+      - SENTRY_BREADCRUMB_LEVEL=${SENTRY_BREADCRUMB_LEVEL:-INFO}
+      - SENTRY_EVENT_LEVEL=${SENTRY_EVENT_LEVEL:-ERROR}
+      - APP_LOG_LEVEL=${APP_LOG_LEVEL:-INFO}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY:-}
+      - NEW_RELIC_APP_NAME=${NEW_RELIC_WORKER_APP_NAME:-Ceres Worker Staging}
+      - NEW_RELIC_LOG=${NEW_RELIC_LOG:-stdout}
+      - NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=${NEW_RELIC_DISTRIBUTED_TRACING_ENABLED:-true}
+    volumes:
+      - ${CERES_DATA_ROOT:-/srv/ceres}/state:/app/state
+      - ${CERES_DATA_ROOT:-/srv/ceres}/data:/app/data
+      - ${CERES_DATA_ROOT:-/srv/ceres}/runs:/app/runs
+      - ${CERES_DATA_ROOT:-/srv/ceres}/reports:/app/reports
+      - ${CERES_DATA_ROOT:-/srv/ceres}/logs:/app/logs
+
+  frontend:
+    image: ${CERES_FRONTEND_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      - API_URL=http://web:5055
+      - APP_VERSION=${APP_VERSION:-0.2.0}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-staging}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-0.2.0}
+      - SENTRY_ENABLE_LOGS=${SENTRY_ENABLE_LOGS:-true}
+      - NEXT_PUBLIC_SENTRY_ENABLE_LOGS=${NEXT_PUBLIC_SENTRY_ENABLE_LOGS:-true}
+      - NEXT_PUBLIC_SENTRY_ENVIRONMENT=${NEXT_PUBLIC_SENTRY_ENVIRONMENT:-staging}
+      - NEXT_PUBLIC_SENTRY_RELEASE=${NEXT_PUBLIC_SENTRY_RELEASE:-${SENTRY_RELEASE:-0.2.0}}
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
+    ports:
+      - "${CERES_FRONTEND_HOST_BIND:-127.0.0.1:3202}:3000"
+
+volumes:
+  redis-data:

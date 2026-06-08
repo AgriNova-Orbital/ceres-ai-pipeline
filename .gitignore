@@ -146,6 +146,9 @@ celerybeat.pid
 .env.lab
 .env.bak
 .envrc
+deploy/lab/portainer.env
+deploy/lab/stack.env
+!deploy/lab/*.env.example
 .venv
 env/
 venv/
